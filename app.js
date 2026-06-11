@@ -347,6 +347,13 @@ function WorldEditor(props) {
   );
   return e("div", {className: "world-editor"},
     e("svg", {viewBox: `0 0 ${MAP_SIZE} ${MAP_SIZE}`},
+      // draw rooms
+      props.rooms.map((room, roomIdx) => {
+        return e("polygon", {
+          className: "room", points: room.join(" "),
+          fill: ROOM_COLORS[roomIdx % ROOM_COLORS.length],
+        });
+      }),
       // draw peg grid
       props.pegs.map(peg => {
         const pegKey = `${peg.x},${peg.y}`;
@@ -394,13 +401,6 @@ function WorldEditor(props) {
             }
           }),
         );
-      }),
-      // draw rooms
-      props.rooms.map((room, roomIdx) => {
-        return e("polygon", {
-          className: "room", points: room.join(" "),
-          fill: ROOM_COLORS[roomIdx % ROOM_COLORS.length],
-        });
       }),
       // draw walls
       walls.map(wall => {
