@@ -228,58 +228,75 @@ function roomContains(bigger, smaller) {
 
 function findRooms(walls) {
   if (walls.length === 0) return [];
-  const completeLoops = [];
-  const start = randNth(walls)[0];
-  let activeTraversals = [[start]];
-  while (activeTraversals.length > 0) {
-    activeTraversals = mapcat(activeTraversals, path => {
-      const prev = path.at(-2);
-      const here = path.at(-1);
-      const nexts = walls.filter(
-        wall => wall.includes(here) && !wall.includes(prev)
-      ).map(
-        wall => wall.find(p => p !== here)
-      );
-      const activeBranches = [];
-      for (const next of nexts) {
-        const hasLooped = path.includes(next);
-        if (hasLooped) {
-          const firstSeenIdx = path.indexOf(next);
-          const trimmedPath = path.slice(firstSeenIdx);
-          completeLoops.push(trimmedPath);
+  const allPointsEver = new Set(mapcat(walls, wall => wall));
+  const allPointsSeen = new Set();
+  const loopsByComponent = [];
+  while (allPointsSeen.size < allPointsEver.size) {
+    // Extract all loops from a SINGLE GRAPH COMPONENT, keeping in mind that
+    // there might be multiple components lying around and that we'll need to
+    // repeat this logic if any vertices aren't covered by the traversals
+    // conducted here.
+    const pointsNotSeenYet = allPointsEver.difference(allPointsSeen);
+    console.log("UNSEEN POINTS", pointsNotSeenYet);
+    const start = pointsNotSeenYet.values().next().value; // arbitrary unseen point
+    allPointsSeen.add(start);
+    const completeLoops = []; // all loops observed in this component
+    let activeTraversals = [[start]];
+    while (activeTraversals.length > 0) {
+      activeTraversals = mapcat(activeTraversals, path => {
+        const prev = path.at(-2);
+        const here = path.at(-1);
+        const nexts = walls.filter(
+          wall => wall.includes(here) && !wall.includes(prev)
+        ).map(
+          wall => wall.find(p => p !== here)
+        );
+        const activeBranches = [];
+        for (const next of nexts) {
+          allPointsSeen.add(next);
+          const hasLooped = path.includes(next);
+          if (hasLooped) {
+            const firstSeenIdx = path.indexOf(next);
+            const trimmedPath = path.slice(firstSeenIdx);
+            completeLoops.push(trimmedPath);
+          }
+          else {
+            const newPath = clone(path);
+            newPath.push(next);
+            activeBranches.push(newPath);
+          }
         }
-        else {
-          const newPath = clone(path);
-          newPath.push(next);
-          activeBranches.push(newPath);
-        }
-      }
-      return activeBranches;
-    });
+        return activeBranches;
+      });
+    }
+    console.log("LOOPS", completeLoops);
+    loopsByComponent.push(completeLoops);
   }
-  console.log("LOOPS", completeLoops);
   // consolidate: sort by length and exclude any loops
   // that have a shorter loop as a clear subset or contained loop
-  completeLoops.sort((a, b) => a.length - b.length);
-  const seenLoopSigs = [];
-  const finalLoops = [];
-  for (const loop of completeLoops) {
-    const sig = new Set(loop);
-    const priorSig = seenLoopSigs.find(prior => sig.isSupersetOf(prior));
-    if (priorSig) {
-      // we've seen an equivalent loop or subloop already, move on
-      continue;
+  const allFinalLoops = mapcat(loopsByComponent, completeLoops => {
+    completeLoops.sort((a, b) => a.length - b.length);
+    const seenLoopSigs = [];
+    const finalLoops = [];
+    for (const loop of completeLoops) {
+      const sig = new Set(loop);
+      const priorSig = seenLoopSigs.find(prior => sig.isSupersetOf(prior));
+      if (priorSig) {
+        // we've seen an equivalent loop or subloop already, move on
+        continue;
+      }
+      const innerLoop = finalLoops.find(prior => roomContains(loop, prior));
+      if (innerLoop) {
+        // we've seen a smaller loop that fits inside this one already, move on
+        continue;
+      }
+      seenLoopSigs.push(sig);
+      finalLoops.push(loop);
     }
-    const innerLoop = finalLoops.find(prior => roomContains(loop, prior));
-    if (innerLoop) {
-      // we've seen a smaller loop that fits inside this one already, move on
-      continue;
-    }
-    seenLoopSigs.push(sig);
-    finalLoops.push(loop);
-  }
-  console.log("FINAL LOOPS", finalLoops);
-  return finalLoops;
+    console.log("FINAL LOOPS", finalLoops);
+    return finalLoops;
+  });
+  return allFinalLoops;
 }
 
 /// App state
