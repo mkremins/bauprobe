@@ -299,6 +299,10 @@ function findRooms(walls) {
   return allFinalLoops;
 }
 
+function pointAlong([x1,y1], [x2,y2], amount) {
+  return [x1 + (x2 - x1) * amount, y1 + (y2 - y1) * amount];
+}
+
 /// App state
 
 const appState = {
@@ -428,6 +432,16 @@ function WorldEditor(props) {
         const isHovered = wallKey === props.latestWall;
         const [x1, y1] = unpackPoint(p1);
         const [x2, y2] = unpackPoint(p2);
+        const hasDoor = props.doors.includes(wallKey);
+        let doorCoords = null;
+        if (hasDoor) {
+          const wallLength = calculateLength(wall);
+          const doorWidthAsProportionOfWallLength = (0.4 * CELL_SIZE) / wallLength;
+          doorCoords = [
+            pointAlong([x1,y1], [x2,y2], 0.5 - doorWidthAsProportionOfWallLength),
+            pointAlong([x1,y1], [x2,y2], 0.5 + doorWidthAsProportionOfWallLength),
+          ];
+        }
         return e("g", {className: "wall"},
           e("line", {
             className: "wall", key: wallKey,
@@ -465,9 +479,11 @@ function WorldEditor(props) {
               }
             }
           }),
-          props.doors.includes(wallKey) && e("line", {
+          hasDoor && e("line", {
             className: "door", stroke: "yellow", strokeWidth: 1,
-            x1, y1, x2, y2, style: {pointerEvents: "none"},
+            x1: doorCoords[0][0], y1: doorCoords[0][1],
+            x2: doorCoords[1][0], y2: doorCoords[1][1],
+            style: {pointerEvents: "none"}, // pass clicks thru to parent wall
           })
         );
       }),
