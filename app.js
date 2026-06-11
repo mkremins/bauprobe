@@ -305,9 +305,11 @@ const appState = {
   pegs: [],
   walls: [],
   rooms: [],
+  doors: [], // list of wall keys that have doors
   activeWallAnchor: null,
   latestPeg: null,
   latestWall: null,
+  mode: "delete", // "delete" or "door" atm
 };
 
 // init pegs
@@ -346,6 +348,23 @@ function WorldEditor(props) {
     drawGhostWall ? [[appState.activeWallAnchor, appState.latestPeg]] : []
   );
   return e("div", {className: "world-editor"},
+    e("div", {className: "editor-toolbar"},
+      e("span", {}, "tools"),
+      e("button", {
+        className: props.mode === "delete" ? "active" : "",
+        onClick: ev => {
+          appState.mode = "delete";
+          renderUI();
+        }
+      }, "delete"),
+      e("button", {
+        className: props.mode === "door" ? "active" : "",
+        onClick: ev => {
+          appState.mode = "door";
+          renderUI();
+        }
+      }, "door"),
+    ),
     e("svg", {viewBox: `0 0 ${MAP_SIZE} ${MAP_SIZE}`},
       // draw rooms
       props.rooms.map((room, roomIdx) => {
@@ -406,28 +425,51 @@ function WorldEditor(props) {
       walls.map(wall => {
         const [p1, p2] = wall;
         const wallKey = `${p1};${p2}`;
-        const isHovered = wallKey === appState.latestWall;
+        const isHovered = wallKey === props.latestWall;
         const [x1, y1] = unpackPoint(p1);
         const [x2, y2] = unpackPoint(p2);
-        return e("line", {
-          className: "wall", key: wallKey,
-          x1, y1, x2, y2, stroke: isHovered ? "red" : "black", strokeWidth: 2,
-          onMouseEnter: ev => {
-            appState.latestWall = wallKey;
-            renderUI();
-          },
-          onMouseLeave: ev => {
-            appState.latestWall = null;
-            renderUI();
-          },
-          onClick: ev => {
-            appState.walls = appState.walls.filter(wall => wall[0] !== p1 || wall[1] !== p2);
-            const rooms = findRooms(appState.walls);
-            console.log("ROOMS", rooms);
-            appState.rooms = rooms;
-            renderUI();
-          }
-        });
+        return e("g", {className: "wall"},
+          e("line", {
+            className: "wall", key: wallKey,
+            x1, y1, x2, y2, stroke: isHovered ? "red" : "black", strokeWidth: 2,
+            onMouseEnter: ev => {
+              appState.latestWall = wallKey;
+              renderUI();
+            },
+            onMouseLeave: ev => {
+              appState.latestWall = null;
+              renderUI();
+            },
+            onClick: ev => {
+              if (props.mode === "delete") {
+                // DELETE MODE: get rid of this wall,
+                // delete its associated door too if any,
+                // and recalc rooms
+                appState.walls = appState.walls.filter(wall => wall[0] !== p1 || wall[1] !== p2);
+                appState.doors = appState.doors.filter(door => door !== wallKey);
+                const rooms = findRooms(appState.walls);
+                console.log("ROOMS", rooms);
+                appState.rooms = rooms;
+                renderUI();
+              }
+              else if (props.mode === "door") {
+                // DOOR MODE: toggle whether this wall's got a door
+                const doorExists = appState.doors.includes(wallKey);
+                if (doorExists) {
+                  appState.doors = appState.doors.filter(door => door !== wallKey);
+                }
+                else {
+                  appState.doors.push(wallKey);
+                }
+                renderUI();
+              }
+            }
+          }),
+          props.doors.includes(wallKey) && e("line", {
+            className: "door", stroke: "yellow", strokeWidth: 1,
+            x1, y1, x2, y2, style: {pointerEvents: "none"},
+          })
+        );
       }),
     ),
   );
