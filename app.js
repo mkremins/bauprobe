@@ -372,7 +372,27 @@ function renderUI() {
   if (!root) {
     root = ReactDOM.createRoot(document.getElementById("app"));
   }
-  root.render(e(WorldEditor, appState));
+  root.render(e(App, appState));
+}
+
+function App(props) {
+  return [
+    e(WorldEditor, props),
+    e(RoomInspector, props),
+  ];
+}
+
+function RoomInspector(props) {
+  return e("div", {className: "room-inspector"},
+    props.rooms.map((room, roomIdx) => {
+      return e("div", {
+          className: "room-data",
+          style: {background: ROOM_COLORS[roomIdx % ROOM_COLORS.length]}
+        },
+        e("h3", {}, "Room " + roomIdx),
+      );
+    }),
+  );
 }
 
 const ROOM_COLORS = [

@@ -8,11 +8,14 @@
 	* { box-sizing: border-box; margin: 0; padding: 0; }
 	body { font-family: sans-serif; line-height: 1.2; padding: 2ch; }
 	h1, p { margin-bottom: 1rem; }
-	.world-editor { max-width: 640px; }
+	#app { display: flex; }
+	.world-editor { width: 50%; padding: 1ch; }
 	.editor-toolbar { border: 1px solid #ccc; padding: 0.5ch; }
 	.editor-toolbar > * { margin-right: 1ch; }
 	button { all: unset; background: #ccc; cursor: pointer; padding: 0.5ch; }
 	button.active { background: forestgreen; color: white; }
+	.room-inspector { width: 50%; padding: 1ch; }
+	.room-data { margin-bottom: 0.5rem; padding: 0.5ch; border-radius: 0.5ch; }
 	</style>
 </head>
 <body>
