@@ -423,9 +423,11 @@ function WorldEditor(props) {
             cx: peg.x, cy: peg.y, r: (isHovered && 2) || (isPillar && 2) || 1,
             fill: (isActive && "red") || (isPillar && "black") || (isHovered && "#555") || "#ccc",
           }),
-          e("circle", {
+          e("rect", {
             className: "peg-catchment-zone",
-            cx: peg.x, cy: peg.y, r: 5, fill: "transparent",
+            x: peg.x - (CELL_SIZE / 2), y: peg.y - (CELL_SIZE / 2),
+            width: CELL_SIZE, height: CELL_SIZE,
+            fill: "transparent",
             onMouseEnter: ev => {
               appState.latestPeg = pegKey;
               renderUI();
