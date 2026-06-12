@@ -543,16 +543,16 @@ function WorldEditor(props) {
           })
         );
       }),
-      // draw guys
+      // draw pathing points debug view
       props.rooms.length > 0 && props.rooms.map(room => {
         const pathingPoints = pathingPointsInside(room);
         if (pathingPoints.length === 0) return null;
-        const guyPosition = randNth(pathingPoints);
-        return pathingPoints.map(guyPosition => e("circle", {
-          className: "guy", cx: guyPosition[0], cy: guyPosition[1],
-          fill: "magenta", r: 3,
+        return pathingPoints.map(point => e("circle", {
+          className: "pathing-point", cx: point[0], cy: point[1],
+          fill: "rgba(255,255,0,0.5)", r: 3,
         }));
       }),
+      // TODO draw guys
     ),
   );
 }
