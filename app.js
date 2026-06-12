@@ -337,6 +337,34 @@ function pointAlong([x1,y1], [x2,y2], amount) {
   return [x1 + (x2 - x1) * amount, y1 + (y2 - y1) * amount];
 }
 
+function buildRoomGraph(rooms, doors) {
+  const adjacencies = {};
+  for (const door of doors) {
+    console.log("eval door...", door);
+    const [doorP1, doorP2] = door.split(";"); // doors are stored as wall keys
+    const roomsJoinedByDoor = rooms.filter(room => {
+      console.log("eval room...", room);
+      const doorIdx1 = room.indexOf(doorP1);
+      const doorIdx2 = room.indexOf(doorP2);
+      const theyreBothInThere = doorIdx1 > -1 && doorIdx2 > -1;
+      const theyreNextToEachOther = Math.abs(doorIdx2 - doorIdx1) === 1;
+      const oneIsFirstOneIsLast =
+        (doorIdx1 === 0 && doorIdx2 === room.length - 1) ||
+        (doorIdx2 === 0 && doorIdx1 === room.length - 1);
+      return theyreBothInThere && (theyreNextToEachOther || oneIsFirstOneIsLast);
+    });
+    for (const room of roomsJoinedByDoor) {
+      const roomKey = room.join(";");
+      adjacencies[roomKey] = adjacencies[roomKey] || [];
+      adjacencies[roomKey].push(door);
+      adjacencies[door] = adjacencies[door] || [];
+      adjacencies[door].push(roomKey);
+    }
+  }
+  console.log("ROOM GRAPH", adjacencies);
+  return adjacencies;
+}
+
 /// App state
 
 const appState = {
@@ -553,6 +581,7 @@ function WorldEditor(props) {
                 const rooms = findRooms(updatedWalls);
                 console.log("ROOMS", rooms);
                 appState.rooms = rooms;
+                buildRoomGraph(appState.rooms, appState.doors);
                 appState.activeWallAnchor = null;
                 renderUI();
               }
@@ -602,6 +631,7 @@ function WorldEditor(props) {
                 const rooms = findRooms(appState.walls);
                 console.log("ROOMS", rooms);
                 appState.rooms = rooms;
+                buildRoomGraph(appState.rooms, appState.doors);
                 renderUI();
               }
               else if (props.mode === "door") {
@@ -613,6 +643,7 @@ function WorldEditor(props) {
                 else {
                   appState.doors.push(wallKey);
                 }
+                buildRoomGraph(appState.rooms, appState.doors);
                 renderUI();
               }
             }
