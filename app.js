@@ -1,5 +1,9 @@
 /// Utils
 
+function avg(xs) {
+  return sum(xs) / xs.length;
+}
+
 function mapcat(xs, f) {
   const ys = [];
   for (const x of xs) {
@@ -128,9 +132,13 @@ function findCollisions(oldWall, newWall) {
   }
 }
 
-function calculateLength(wall) {
-  const [[x1, y1], [x2, y2]] = wall.map(unpackPoint);
+function distance([x1, y1], [x2, y2]) {
   return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
+}
+
+function calculateLength(wall) {
+  const [p1, p2] = wall.map(unpackPoint);
+  return distance(p1, p2);
 }
 
 function splitWall(wall, splitPoints) {
@@ -362,6 +370,87 @@ function buildRoomGraph(rooms, doors) {
     }
   }
   console.log("ROOM GRAPH", adjacencies);
+  return adjacencies;
+}
+
+function pathfindRoomGraph(graph, initRoom, targetRoom) {
+  let activeTraversals = [[initRoom]];
+  const validPaths = [];
+  while (activeTraversals.length > 0) {
+    activeTraversals = mapcat(activeTraversals, path => {
+      const here = path.at(-1);
+      if (here === targetRoom) {
+        // we found it!
+        validPaths.push(path);
+        return [];
+      }
+      const nexts = graph[here] || [];
+      const unseenNexts = nexts.filter(next => !path.includes(next));
+      return unseenNexts.map(next => {
+        const newPath = clone(path);
+        newPath.push(next);
+        return newPath;
+      });
+    });
+  }
+  return validPaths;
+}
+
+function buildNavMesh(room, doors) {
+  const THRESHOLD = Math.sqrt(2 * (CELL_SIZE * CELL_SIZE));
+  const adjacencies = {};
+  const pathingPoints = pathingPointsInside(room);
+  // first, mark all sufficiently close-together pathing points as adjacent
+  for (const point of pathingPoints) {
+    const pointKey = `${point[0]},${point[1]}`;
+    const adjacent = pathingPoints.filter(other => {
+      return distance(point, other) <= THRESHOLD;
+    });
+    for (const adj of adjacent) {
+      const adjKey = `${adj[0]},${adj[1]}`;
+      adjacencies[pointKey] = adjacencies[pointKey] || new Set();
+      adjacencies[pointKey].add(adjKey);
+      adjacencies[adjKey] = adjacencies[adjKey] || new Set();
+      adjacencies[adjKey].add(pointKey);
+    }
+  }
+  // then, mark the closest pathing points for each door
+  for (const door of doors) {
+    const doorKey = door.join(";");
+    if (pathingPoints.length === 0) {
+      // there are no pathing points in this room!
+      // so we'll just set all the room's doors directly adjacent to each other.
+      for (const other of doors) {
+        const otherKey = other.join(";")
+        if (doorKey === otherKey) continue;
+        adjacencies[doorKey] = adjacencies[doorKey] || new Set();
+        adjacencies[doorKey].add(otherKey);
+        adjacencies[otherKey] = adjacencies[otherKey] || new Set();
+        adjacencies[otherKey].add(doorKey);
+      }
+      continue;
+    }
+    // find the door's midpoint and the closest pathing points
+    const doorPoint = pointAlong(door[0], door[1], 0.5);
+    pathingPoints.sort((a, b) => {
+      const distToA = distance(doorPoint, a);
+      const distToB = distance(doorPoint, b);
+      return a - b;
+    });
+    const minDist = distance(doorPoint, pathingPoints[0]);
+    const closest = takeWhile(p => distance(p, doorPoint) === minDist, pathingPoints);
+    // mark all closest pathing points as adjacent to the door, in both directions
+    for (const close of closest) {
+      const pointKey = `${close[0]},${close[1]}`;
+      adjacencies[pointKey] = adjacencies[pointKey] || new Set();
+      adjacencies[pointKey].add(doorKey);
+      adjacencies[doorKey] = adjacencies[doorKey] || new Set();
+      adjacencies[doorKey].add(pointKey);
+    }
+  }
+  for (const key of Object.keys(adjacencies)) {
+    adjacencies[key] = Array.from(adjacencies[key]); // de-setify
+  }
   return adjacencies;
 }
 
@@ -666,6 +755,54 @@ function WorldEditor(props) {
         }));
       }),
       // TODO draw guys
+      props.rooms.length > 1 && (() => {
+        const initRoom = randNth(props.rooms);
+        const initRoomKey = initRoom.join(";");
+        const initPositions = pathingPointsInside(initRoom);
+        console.log("initRoom", initRoom, initPositions);
+        if (initPositions.length === 0) {
+          // TODO nowhere to stand in init room :(
+          return null;
+        }
+        const targetRoom = randNth(props.rooms.filter(r => r.join(";") !== initRoomKey));
+        const targetRoomKey = targetRoom.join(";");
+        const targetPositions = pathingPointsInside(targetRoom);
+        console.log("targetRoom", targetRoom, targetPositions);
+        if (targetPositions.length === 0) {
+          // TODO nowhere to stand in target room :(
+          return null;
+        }
+        const roomGraph = buildRoomGraph(props.rooms, props.doors);
+        const roomsAndDoorsPaths = pathfindRoomGraph(roomGraph, initRoomKey, targetRoomKey);
+        roomsAndDoorsPaths.sort((a, b) => a.length - b.length); // shortest paths first
+        console.log("roomsAndDoorsPaths", roomsAndDoorsPaths);
+        if (roomsAndDoorsPaths.length === 0) {
+          // TODO no path from init room to target room :(
+          return null;
+        }
+        const roomsAndDoorsPath = roomsAndDoorsPaths[0];
+        const roomsAndDoorsPositions = roomsAndDoorsPath.map(roomOrDoor => {
+          const points = roomOrDoor.split(";").map(unpackPoint);
+          if (points.length === 2) {
+            // it's a door! yield center
+            return pointAlong(points[0], points[1], 0.5);
+          }
+          else if (points.length > 2) {
+            // it's a room! yield centroid...? random pathing pos...?
+            return [avg(points.map(p => p[0])), avg(points.map(p => p[1]))];
+          }
+          else {
+            // should never get here
+            console.warn("invalid room or door in path!", roomOrDoor);
+            return [0, 0]; // so downstream code doesn't crash?
+          }
+        });
+        return e("polyline", {
+          className: "guy-path",
+          points: roomsAndDoorsPositions.join(" "),
+          stroke: "magenta", strokeWidth: 2, fill: "none",
+        });
+      })(),
     ),
   );
 }
