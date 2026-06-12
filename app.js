@@ -213,6 +213,40 @@ function pointInsidePolygon(point, polygon) {
   return isInside;
 }
 
+function boundingBox(polygon) {
+  const points = polygon.map(unpackPoint);
+  const xs = points.map(p => p[0]);
+  const ys = points.map(p => p[1]);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return {minX, maxX, minY, maxY};
+  //return [[minX, minY], [minX, maxY], [maxX, minY], [maxX, maxY]];
+}
+
+function pathingPointsInside(polygon) {
+  const EPSILON = 0.0001;
+  const bb = boundingBox(polygon);
+  const pointsInside = [];
+  for (let x = bb.minX + (CELL_SIZE / 2); x < bb.maxX; x += CELL_SIZE) {
+    for (let y = bb.minY + (CELL_SIZE / 2); y < bb.maxY; y += CELL_SIZE) {
+      // check variants of each point to make sure it isn't super close to a wall lol
+      // FIXME this is the worst way to do this probably???
+      const testPoints = [
+        `${x - EPSILON},${y - EPSILON}`,
+        `${x - EPSILON},${y + EPSILON}`,
+        `${x + EPSILON},${y - EPSILON}`,
+        `${x + EPSILON},${y + EPSILON}`
+      ];
+      if (testPoints.every(p => pointInsidePolygon(p, polygon))) {
+        pointsInside.push([x, y]);
+      }
+    }
+  }
+  return pointsInside;
+}
+
 function roomContains(bigger, smaller) {
   // i suspect we can cheat on general polygon contains by checking,
   // for each vertex of *this* polygon:
@@ -486,6 +520,16 @@ function WorldEditor(props) {
             style: {pointerEvents: "none"}, // pass clicks thru to parent wall
           })
         );
+      }),
+      // draw guys
+      props.rooms.length > 0 && props.rooms.map(room => {
+        const pathingPoints = pathingPointsInside(room);
+        if (pathingPoints.length === 0) return null;
+        const guyPosition = randNth(pathingPoints);
+        return pathingPoints.map(guyPosition => e("circle", {
+          className: "guy", cx: guyPosition[0], cy: guyPosition[1],
+          fill: "magenta", r: 3,
+        }));
       }),
     ),
   );
