@@ -363,6 +363,77 @@ for (let x = 0; x < GRID_SIZE; x++) {
   }
 }
 
+/// Save files
+
+// download a file to the user's machine
+// based on https://stackoverflow.com/a/9834261
+function downloadFile(filename, contents) {
+  const blob = new Blob([contents]);
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.style.display = "none";
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
+}
+
+// request a file from the user and pass its contents to `cb`
+// note: can only be called from inside a user interaction handler (eg onclick)
+// based on https://stackoverflow.com/a/63227449
+function uploadFile(cb, opts) {
+  const input = document.createElement("input");
+  input.type = "file";
+  if (opts?.fileType === "json") {
+    input.accept = ".json";
+  }
+  else if (opts?.fileType === "image") {
+    input.accept = ".png,.jpg,.jpeg";
+  }
+  input.onchange = (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev2) {
+      cb(reader.result);
+    };
+    if (opts?.fileType === "image") {
+      reader.readAsDataURL(file);
+    }
+    else {
+      reader.readAsText(file);
+    }
+  };
+  document.body.appendChild(input);
+  input.click();
+  input.remove();
+}
+
+// download a JSON file representing the world
+function exportWorld() {
+  const dateTimeString = (new Date()).toISOString().split(".")[0].replace("T", "_").replaceAll(":", "-");
+  const filename = `praxland_${dateTimeString}.json`;
+  const saveState = clone(appState);
+  for (const key of Object.keys(saveState)) {
+    if (["walls","rooms","doors"].includes(key)) continue;
+    delete saveState[key];
+  }
+  const contents = JSON.stringify(saveState);
+  downloadFile(filename, contents);
+}
+
+// upload a JSON file representing the world
+function importWorld() {
+  uploadFile(contents => {
+    const saveState = JSON.parse(contents);
+    for (const key of Object.keys(saveState)) {
+      appState[key] = saveState[key];
+    }
+  }, {fileType: "json"});
+}
+
 /// UI
 
 const e = React.createElement;
@@ -408,6 +479,17 @@ function WorldEditor(props) {
   return e("div", {className: "world-editor"},
     e("div", {className: "editor-toolbar"},
       e("span", {}, "tools"),
+      e("button", {
+        onClick: ev => {
+          importWorld();
+          renderUI();
+        }
+      }, "import"),
+      e("button", {
+        onClick: ev => {
+          exportWorld();
+        }
+      }, "export"),
       e("button", {
         className: props.mode === "delete" ? "active" : "",
         onClick: ev => {
