@@ -26,6 +26,39 @@ function distinctBy(f, xs) {
   return ys;
 }
 
+function findPaths(graph, init, target) {
+  let activeTraversals = [[init]];
+  const validPaths = [];
+  while (activeTraversals.length > 0) {
+    activeTraversals = mapcat(activeTraversals, path => {
+      const here = path.at(-1);
+      if (here === target) {
+        // we found it!
+        validPaths.push(path);
+        return [];
+      }
+      const nexts = graph[here] || [];
+      const unseenNexts = nexts.filter(next => !path.includes(next));
+      return unseenNexts.map(next => {
+        const newPath = clone(path);
+        newPath.push(next);
+        return newPath;
+      });
+    });
+  }
+  return validPaths;
+}
+
+/// Geometry
+
+function distance([x1, y1], [x2, y2]) {
+  return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
+}
+
+function pointAlong([x1,y1], [x2,y2], amount) {
+  return [x1 + (x2 - x1) * amount, y1 + (y2 - y1) * amount];
+}
+
 /// Model
 
 function unpackPoint(pointStr) {
@@ -132,29 +165,17 @@ function findCollisions(oldWall, newWall) {
   }
 }
 
-function distance([x1, y1], [x2, y2]) {
-  return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
-}
-
-function calculateLength(wall) {
-  const [p1, p2] = wall.map(unpackPoint);
-  return distance(p1, p2);
-}
-
 function splitWall(wall, splitPoints) {
   if (splitPoints.length === 0) return [wall];
-  console.log("original wall length", calculateLength(wall));
   const allPoints = wall.concat(splitPoints);
   allPoints.sort((a, b) => {
     const [ax, ay] = unpackPoint(a);
     const [bx, by] = unpackPoint(b);
     return (ax - bx) || (ay - by);
   }); // sort by grid order i guess?
-  console.log("all points", allPoints);
   const splitSections = [];
   for (let i = 0; i < allPoints.length - 1; i++) {
     const section = [allPoints[i], allPoints[i+1]];
-    console.log("section length", calculateLength(section));
     splitSections.push(section);
   }
   return splitSections;
@@ -341,10 +362,6 @@ function findRooms(walls) {
   return allFinalLoops;
 }
 
-function pointAlong([x1,y1], [x2,y2], amount) {
-  return [x1 + (x2 - x1) * amount, y1 + (y2 - y1) * amount];
-}
-
 function roomHasWall(room, wall) {
   // room is array of packed (string) points, wall is wall key
   const [wallP1, wallP2] = wall.split(";");
@@ -431,29 +448,6 @@ function buildNavMesh(room, doors) {
     adjacencies[key] = Array.from(adjacencies[key]); // de-setify
   }
   return adjacencies;
-}
-
-function findPaths(graph, init, target) {
-  let activeTraversals = [[init]];
-  const validPaths = [];
-  while (activeTraversals.length > 0) {
-    activeTraversals = mapcat(activeTraversals, path => {
-      const here = path.at(-1);
-      if (here === target) {
-        // we found it!
-        validPaths.push(path);
-        return [];
-      }
-      const nexts = graph[here] || [];
-      const unseenNexts = nexts.filter(next => !path.includes(next));
-      return unseenNexts.map(next => {
-        const newPath = clone(path);
-        newPath.push(next);
-        return newPath;
-      });
-    });
-  }
-  return validPaths;
 }
 
 /// App state
@@ -693,7 +687,7 @@ function WorldEditor(props) {
         const hasDoor = props.doors.includes(wallKey);
         let doorCoords = null;
         if (hasDoor) {
-          const wallLength = calculateLength(wall);
+          const wallLength = distance([x1, y1], [x2, y2]);
           const doorWidthAsProportionOfWallLength = (0.4 * CELL_SIZE) / wallLength;
           doorCoords = [
             pointAlong([x1,y1], [x2,y2], 0.5 - doorWidthAsProportionOfWallLength),
