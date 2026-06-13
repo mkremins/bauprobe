@@ -6,8 +6,8 @@ function avg(xs) {
 
 function mapcat(xs, f) {
   const ys = [];
-  for (const x of xs) {
-    for (const y of f(x) || []) {
+  for (let i = 0; i < xs.length; i++) {
+    for (const y of f(xs[i], i) || []) {
       ys.push(y);
     }
   }
@@ -345,22 +345,24 @@ function pointAlong([x1,y1], [x2,y2], amount) {
   return [x1 + (x2 - x1) * amount, y1 + (y2 - y1) * amount];
 }
 
+function roomHasWall(room, wall) {
+  // room is array of packed (string) points, wall is wall key
+  const [wallP1, wallP2] = wall.split(";");
+  const wallIdx1 = room.indexOf(wallP1);
+  const wallIdx2 = room.indexOf(wallP2);
+  const theyreBothInThere = wallIdx1 > -1 && wallIdx2 > -1;
+  const theyreNextToEachOther = Math.abs(wallIdx2 - wallIdx1) === 1;
+  const oneIsFirstOneIsLast =
+    (wallIdx1 === 0 && wallIdx2 === room.length - 1) ||
+    (wallIdx2 === 0 && wallIdx1 === room.length - 1);
+  return theyreBothInThere && (theyreNextToEachOther || oneIsFirstOneIsLast);
+}
+
 function buildRoomGraph(rooms, doors) {
   const adjacencies = {};
   for (const door of doors) {
     console.log("eval door...", door);
-    const [doorP1, doorP2] = door.split(";"); // doors are stored as wall keys
-    const roomsJoinedByDoor = rooms.filter(room => {
-      console.log("eval room...", room);
-      const doorIdx1 = room.indexOf(doorP1);
-      const doorIdx2 = room.indexOf(doorP2);
-      const theyreBothInThere = doorIdx1 > -1 && doorIdx2 > -1;
-      const theyreNextToEachOther = Math.abs(doorIdx2 - doorIdx1) === 1;
-      const oneIsFirstOneIsLast =
-        (doorIdx1 === 0 && doorIdx2 === room.length - 1) ||
-        (doorIdx2 === 0 && doorIdx1 === room.length - 1);
-      return theyreBothInThere && (theyreNextToEachOther || oneIsFirstOneIsLast);
-    });
+    const roomsJoinedByDoor = rooms.filter(room => roomHasWall(room, door));
     for (const room of roomsJoinedByDoor) {
       const roomKey = room.join(";");
       adjacencies[roomKey] = adjacencies[roomKey] || [];
@@ -373,13 +375,71 @@ function buildRoomGraph(rooms, doors) {
   return adjacencies;
 }
 
-function pathfindRoomGraph(graph, initRoom, targetRoom) {
-  let activeTraversals = [[initRoom]];
+function buildNavMesh(room, doors) {
+  const THRESHOLD = Math.sqrt(2 * (CELL_SIZE * CELL_SIZE));
+  const adjacencies = {};
+  const pathingPoints = pathingPointsInside(room);
+  // first, mark all sufficiently close-together pathing points as adjacent
+  for (const point of pathingPoints) {
+    const pointKey = `${point[0]},${point[1]}`;
+    const adjacent = pathingPoints.filter(other => {
+      const dist = distance(point, other);
+      return dist <= THRESHOLD && dist > 0;
+    });
+    for (const adj of adjacent) {
+      const adjKey = `${adj[0]},${adj[1]}`;
+      adjacencies[pointKey] = adjacencies[pointKey] || new Set();
+      adjacencies[pointKey].add(adjKey);
+      adjacencies[adjKey] = adjacencies[adjKey] || new Set();
+      adjacencies[adjKey].add(pointKey);
+    }
+  }
+  // then, mark the closest pathing points for each door
+  for (const door of doors) {
+    if (pathingPoints.length === 0) {
+      // there are no pathing points in this room!
+      // so we'll just set all the room's doors directly adjacent to each other.
+      for (const other of doors) {
+        if (door === other) continue;
+        adjacencies[door] = adjacencies[door] || new Set();
+        adjacencies[door].add(other);
+        adjacencies[other] = adjacencies[other] || new Set();
+        adjacencies[other].add(door);
+      }
+      continue;
+    }
+    // find the door's midpoint and the closest pathing points
+    const [doorP1, doorP2] = door.split(";").map(unpackPoint);
+    const doorPoint = pointAlong(doorP1, doorP2, 0.5);
+    pathingPoints.sort((a, b) => {
+      const distToA = distance(doorPoint, a);
+      const distToB = distance(doorPoint, b);
+      return distToA - distToB;
+    });
+    const minDist = distance(doorPoint, pathingPoints[0]);
+    const closest = takeWhile(p => distance(p, doorPoint) === minDist, pathingPoints);
+    // mark all closest pathing points as adjacent to the door, in both directions
+    for (const close of closest) {
+      const pointKey = `${close[0]},${close[1]}`;
+      adjacencies[pointKey] = adjacencies[pointKey] || new Set();
+      adjacencies[pointKey].add(door);
+      adjacencies[door] = adjacencies[door] || new Set();
+      adjacencies[door].add(pointKey);
+    }
+  }
+  for (const key of Object.keys(adjacencies)) {
+    adjacencies[key] = Array.from(adjacencies[key]); // de-setify
+  }
+  return adjacencies;
+}
+
+function findPaths(graph, init, target) {
+  let activeTraversals = [[init]];
   const validPaths = [];
   while (activeTraversals.length > 0) {
     activeTraversals = mapcat(activeTraversals, path => {
       const here = path.at(-1);
-      if (here === targetRoom) {
+      if (here === target) {
         // we found it!
         validPaths.push(path);
         return [];
@@ -394,64 +454,6 @@ function pathfindRoomGraph(graph, initRoom, targetRoom) {
     });
   }
   return validPaths;
-}
-
-function buildNavMesh(room, doors) {
-  const THRESHOLD = Math.sqrt(2 * (CELL_SIZE * CELL_SIZE));
-  const adjacencies = {};
-  const pathingPoints = pathingPointsInside(room);
-  // first, mark all sufficiently close-together pathing points as adjacent
-  for (const point of pathingPoints) {
-    const pointKey = `${point[0]},${point[1]}`;
-    const adjacent = pathingPoints.filter(other => {
-      return distance(point, other) <= THRESHOLD;
-    });
-    for (const adj of adjacent) {
-      const adjKey = `${adj[0]},${adj[1]}`;
-      adjacencies[pointKey] = adjacencies[pointKey] || new Set();
-      adjacencies[pointKey].add(adjKey);
-      adjacencies[adjKey] = adjacencies[adjKey] || new Set();
-      adjacencies[adjKey].add(pointKey);
-    }
-  }
-  // then, mark the closest pathing points for each door
-  for (const door of doors) {
-    const doorKey = door.join(";");
-    if (pathingPoints.length === 0) {
-      // there are no pathing points in this room!
-      // so we'll just set all the room's doors directly adjacent to each other.
-      for (const other of doors) {
-        const otherKey = other.join(";")
-        if (doorKey === otherKey) continue;
-        adjacencies[doorKey] = adjacencies[doorKey] || new Set();
-        adjacencies[doorKey].add(otherKey);
-        adjacencies[otherKey] = adjacencies[otherKey] || new Set();
-        adjacencies[otherKey].add(doorKey);
-      }
-      continue;
-    }
-    // find the door's midpoint and the closest pathing points
-    const doorPoint = pointAlong(door[0], door[1], 0.5);
-    pathingPoints.sort((a, b) => {
-      const distToA = distance(doorPoint, a);
-      const distToB = distance(doorPoint, b);
-      return a - b;
-    });
-    const minDist = distance(doorPoint, pathingPoints[0]);
-    const closest = takeWhile(p => distance(p, doorPoint) === minDist, pathingPoints);
-    // mark all closest pathing points as adjacent to the door, in both directions
-    for (const close of closest) {
-      const pointKey = `${close[0]},${close[1]}`;
-      adjacencies[pointKey] = adjacencies[pointKey] || new Set();
-      adjacencies[pointKey].add(doorKey);
-      adjacencies[doorKey] = adjacencies[doorKey] || new Set();
-      adjacencies[doorKey].add(pointKey);
-    }
-  }
-  for (const key of Object.keys(adjacencies)) {
-    adjacencies[key] = Array.from(adjacencies[key]); // de-setify
-  }
-  return adjacencies;
 }
 
 /// App state
@@ -773,7 +775,7 @@ function WorldEditor(props) {
           return null;
         }
         const roomGraph = buildRoomGraph(props.rooms, props.doors);
-        const roomsAndDoorsPaths = pathfindRoomGraph(roomGraph, initRoomKey, targetRoomKey);
+        const roomsAndDoorsPaths = findPaths(roomGraph, initRoomKey, targetRoomKey);
         roomsAndDoorsPaths.sort((a, b) => a.length - b.length); // shortest paths first
         console.log("roomsAndDoorsPaths", roomsAndDoorsPaths);
         if (roomsAndDoorsPaths.length === 0) {
@@ -781,25 +783,50 @@ function WorldEditor(props) {
           return null;
         }
         const roomsAndDoorsPath = roomsAndDoorsPaths[0];
-        const roomsAndDoorsPositions = roomsAndDoorsPath.map(roomOrDoor => {
+        const fullPath = mapcat(roomsAndDoorsPath, (roomOrDoor, idx) => {
           const points = roomOrDoor.split(";").map(unpackPoint);
           if (points.length === 2) {
             // it's a door! yield center
-            return pointAlong(points[0], points[1], 0.5);
+            return [pointAlong(points[0], points[1], 0.5)];
           }
           else if (points.length > 2) {
-            // it's a room! yield centroid...? random pathing pos...?
-            return [avg(points.map(p => p[0])), avg(points.map(p => p[1]))];
+            // it's a room! yield path along its navmesh
+            const doors = props.doors.filter(door => roomHasWall(roomOrDoor.split(";"), door));
+            const navmesh = buildNavMesh(points.map(p => p.join(",")), doors);
+            console.log("navmesh", navmesh);
+            const sourceDoor = roomsAndDoorsPath[idx - 1];
+            const targetDoor = roomsAndDoorsPath[idx + 1];
+            console.log("doors", sourceDoor, targetDoor);
+            const navmeshPaths = findPaths(navmesh, sourceDoor, targetDoor);
+            console.log("navmeshPaths", navmeshPaths);
+            navmeshPaths.sort((a, b) => a.length - b.length); // shortest paths first
+            const finalNavmeshPath = navmeshPaths[0] || []; // fallback: straight line thru room
+            // FIXME maybe use centroid or random navmesh point for fallback instead?
+            return finalNavmeshPath.map(pointOrDoor => {
+              const bits = pointOrDoor.split(";")
+              if (bits.length === 1) {
+                return unpackPoint(pointOrDoor);
+              }
+              else if (bits.length === 2) {
+                return pointAlong(...bits.map(unpackPoint), 0.5);
+              }
+              else {
+                // should never get here
+                console.warn("invalid navmesh path component!", pointOrDoor);
+                return [0, 0]; // ???
+              }
+            });
           }
           else {
             // should never get here
             console.warn("invalid room or door in path!", roomOrDoor);
-            return [0, 0]; // so downstream code doesn't crash?
+            return [];
           }
         });
+        console.log("fullPath", fullPath);
         return e("polyline", {
           className: "guy-path",
-          points: roomsAndDoorsPositions.join(" "),
+          points: fullPath.join(" "),
           stroke: "magenta", strokeWidth: 2, fill: "none",
         });
       })(),
