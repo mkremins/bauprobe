@@ -183,7 +183,7 @@ function splitWall(wall, splitPoints) {
 
 function addWall(oldWalls, newWall) {
   const collisions = mapcat(oldWalls, oldWall => findCollisions(oldWall, newWall));
-  console.log("COLLISIONS", collisions);
+  //console.log("COLLISIONS", collisions);
   if (collisions.length === 0) {
     // No collisions, push the new wall and call it a day!
     oldWalls.push(newWall);
@@ -214,7 +214,7 @@ function addWall(oldWalls, newWall) {
         // TODO somehow actually kill the subsumed old wall?
       }
     }
-    console.log("SPLITS", newWallSplits, splitsPerOldWall);
+    //console.log("SPLITS", newWallSplits, splitsPerOldWall);
     const newWallSections = splitWall(newWall, Array.from(newWallSplits));
     const updatedOldWalls = mapcat(oldWalls, oldWall => {
       const oldWallKey = JSON.stringify(oldWall);
@@ -300,7 +300,7 @@ function findRooms(walls) {
     // repeat this logic if any vertices aren't covered by the traversals
     // conducted here.
     const pointsNotSeenYet = allPointsEver.difference(allPointsSeen);
-    console.log("UNSEEN POINTS", pointsNotSeenYet);
+    //console.log("UNSEEN POINTS", pointsNotSeenYet);
     const start = pointsNotSeenYet.values().next().value; // arbitrary unseen point
     allPointsSeen.add(start);
     const completeLoops = []; // all loops observed in this component
@@ -332,7 +332,7 @@ function findRooms(walls) {
         return activeBranches;
       });
     }
-    console.log("LOOPS", completeLoops);
+    //console.log("LOOPS", completeLoops);
     loopsByComponent.push(completeLoops);
   }
   // consolidate: sort by length and exclude any loops
@@ -356,7 +356,7 @@ function findRooms(walls) {
       seenLoopSigs.push(sig);
       finalLoops.push(loop);
     }
-    console.log("FINAL LOOPS", finalLoops);
+    //console.log("FINAL LOOPS", finalLoops);
     return finalLoops;
   });
   return allFinalLoops;
@@ -378,7 +378,7 @@ function roomHasWall(room, wall) {
 function buildRoomGraph(rooms, doors) {
   const adjacencies = {};
   for (const door of doors) {
-    console.log("eval door...", door);
+    //console.log("eval door...", door);
     const roomsJoinedByDoor = rooms.filter(room => roomHasWall(room, door));
     for (const room of roomsJoinedByDoor) {
       const roomKey = room.join(";");
@@ -460,7 +460,8 @@ const appState = {
   activeWallAnchor: null,
   latestPeg: null,
   latestWall: null,
-  mode: "delete", // "delete" or "door" atm
+  mode: "delete", // "delete" or "door" or "sim" atm
+  guys: [], // has pos, task, taskQueue
 };
 
 // init pegs
@@ -474,6 +475,203 @@ for (let x = 0; x < GRID_SIZE; x++) {
       y: (y * CELL_SIZE) + (CELL_SIZE / 2),
     });
   }
+}
+
+/// Simulation
+
+// Given a pair of points `initPos` and `targetPos` (currently assumed to be
+// within rooms but not guaranteed to be pathing points), assemble and return
+// a sequence of points that represent an unobstructed path between them.
+// If no such path is possible, return null.
+function planPath(initPos, targetPos) {
+  const packedInitPos = initPos.join(",");
+  const packedTargetPos = targetPos.join(",");
+  const initRoom = appState.rooms.find(room => pointInsidePolygon(packedInitPos, room));
+  const initRoomKey = initRoom.join(";");
+  const targetRoom = appState.rooms.find(room => pointInsidePolygon(packedTargetPos, room));
+  const targetRoomKey = targetRoom.join(";");
+  console.log(
+    "pathing from", packedInitPos, "in room", initRoomKey,
+    "to", packedTargetPos, "in room", targetRoomKey
+  );
+  const pathingWithinRoom = initRoomKey === targetRoomKey;
+  if (pathingWithinRoom) {
+    // TODO hacky shortcut: within-room path is just a straight frickin line.
+    // this should probably instead check for obstructions and path via navmesh
+    // if any obstructions are present.
+    return [targetPos];
+  }
+  // TODO below is fully copy-pasted from earlier pathing logic, probably has issues
+  // - no proper navigation from initPos to first door, or last door to targetPos
+  // - no straight-line shortcutting if door->door path is unobstructed
+  const roomGraph = buildRoomGraph(appState.rooms, appState.doors);
+  const roomsAndDoorsPaths = findPaths(roomGraph, initRoomKey, targetRoomKey);
+  roomsAndDoorsPaths.sort((a, b) => a.length - b.length); // shortest paths first
+  console.log("roomsAndDoorsPaths", roomsAndDoorsPaths);
+  if (roomsAndDoorsPaths.length === 0) {
+    // no path from init room to target room :(
+    return null;
+  }
+  const roomsAndDoorsPath = roomsAndDoorsPaths[0];
+  const innerPath = mapcat(roomsAndDoorsPath, (roomOrDoor, idx) => {
+    const points = roomOrDoor.split(";").map(unpackPoint);
+    if (points.length === 2) {
+      // it's a door! yield center
+      return [pointAlong(points[0], points[1], 0.5)];
+    }
+    else if (points.length > 2) {
+      // it's a room! yield path along its navmesh
+      const doors = appState.doors.filter(door => roomHasWall(roomOrDoor.split(";"), door));
+      const navmesh = buildNavMesh(points.map(p => p.join(",")), doors);
+      console.log("navmesh", navmesh);
+      const sourceDoor = roomsAndDoorsPath[idx - 1];
+      const targetDoor = roomsAndDoorsPath[idx + 1];
+      console.log("doors", sourceDoor, targetDoor);
+      const navmeshPaths = findPaths(navmesh, sourceDoor, targetDoor);
+      console.log("navmeshPaths", navmeshPaths);
+      navmeshPaths.sort((a, b) => a.length - b.length); // shortest paths first
+      const finalNavmeshPath = navmeshPaths[0] || []; // fallback: straight line thru room
+      // FIXME maybe use centroid or random navmesh point for fallback instead?
+      return finalNavmeshPath.map(pointOrDoor => {
+        const bits = pointOrDoor.split(";")
+        if (bits.length === 1) {
+          return unpackPoint(pointOrDoor);
+        }
+        else if (bits.length === 2) {
+          return pointAlong(...bits.map(unpackPoint), 0.5);
+        }
+        else {
+          // should never get here
+          console.warn("invalid navmesh path component!", pointOrDoor);
+          return [0, 0]; // ???
+        }
+      });
+    }
+    else {
+      // should never get here
+      console.warn("invalid room or door in path!", roomOrDoor);
+      return [];
+    }
+  });
+  const fullPath = [initPos, ...innerPath, targetPos];
+  console.log("fullPath", fullPath);
+  return fullPath;
+}
+
+// Assemble and return a fresh new task queue for the given `guy`.
+// At the moment this will task them either with moving to a random
+// pathing point in the world or waiting for a fixed amount of time.
+function assignRandomGoal(guy) {
+  const FALLBACK_GOAL = [{type: "wait", ticksToWait: 100}];
+  const possibleTargets = mapcat(appState.rooms, room => pathingPointsInside(room));
+  if (possibleTargets.length === 0) {
+    // no viable target anywhere, bail out early
+    return FALLBACK_GOAL;
+  }
+  const targetPos = randNth(possibleTargets);
+  const path = planPath(guy.pos, targetPos);
+  return path?.map(point => ({type: "move", to: point})) || FALLBACK_GOAL;
+}
+
+// Spawn a new guy inside the given `room`, assign them a random goal,
+// and return them so that they can be added to `appState.guys`.
+function spawnGuy(room) {
+  const pathingPoints = pathingPointsInside(room);
+  if (pathingPoints.length === 0) return;
+  const initPos = randNth(pathingPoints);
+  const guy = {type: "guy", pos: initPos};
+  guy.taskQueue = assignRandomGoal(guy);
+  return guy;
+}
+
+// Return whether the current task of the given `guy` has run to completion.
+function hasCompletedCurrentTask(guy) {
+  const task = guy.task;
+  if (task.type === "move") {
+    return task.amount >= 1;
+  }
+  else if (task.type === "wait") {
+    return task.ticksTaken >= task.ticksToWait;
+  }
+  else {
+    console.warn("invalid current task type", guy);
+    return true;
+  }
+}
+
+// Progress the current task of the given `guy` by one tick.
+function keepDoingCurrentTask(guy) {
+  const task = guy.task;
+  if (task.type === "move") {
+    const oldPos = clone(guy.pos);
+    guy.pos = pointAlong(task.from, task.to, task.amount);
+    task.amount += task.amountPerFrame;
+  }
+  else if (task.type === "wait") {
+    task.ticksTaken += 1;
+  }
+  else {
+    console.warn("invalid current task type", guy);
+  }
+}
+
+// Check the task queue for the given `guy`, pull the next task off of it,
+// and set the `guy` working on this task.
+function startDoingNextTask(guy) {
+  const task = guy.taskQueue.shift();
+  if (task.type === "move") {
+    task.from = guy.pos;
+    task.amount = 0;
+    const dist = distance(task.from, task.to);
+    const amountPerFrame = 0.05; // TODO `DIST_PER_FRAME` as fraction of dist?
+    task.amountPerFrame = amountPerFrame;
+  }
+  else if (task.type === "wait") {
+    task.ticksTaken = 0;
+  }
+  else {
+    console.warn("invalid next task type", guy, task);
+  }
+  guy.task = task;
+}
+
+function tickSimulation() {
+  // for each guy, decide what they should be doing
+  for (const guy of appState.guys) {
+    if (guy.task) {
+      if (hasCompletedCurrentTask(guy)) {
+        console.log("completed task!", guy);
+        delete guy.task;
+      }
+      else {
+        keepDoingCurrentTask(guy);
+      }
+    }
+    else if (guy.taskQueue.length > 0) {
+      startDoingNextTask(guy);
+    }
+    else {
+      guy.taskQueue = assignRandomGoal(guy);
+    }
+  }
+  // show task progress
+  renderUI();
+  // queue up the next frame if still running the sim
+  if (appState.mode !== "sim") return;
+  requestAnimationFrame(tickSimulation);
+}
+
+function startSimulation() {
+  // clear the preexisting guys
+  appState.guys = [];
+  // create a guy for each room
+  for (const room of appState.rooms) {
+    const guy = spawnGuy(room);
+    if (!guy) continue;
+    appState.guys.push(guy);
+  }
+  // start the sim loop
+  requestAnimationFrame(tickSimulation);
 }
 
 /// Save files
@@ -617,6 +815,14 @@ function WorldEditor(props) {
           renderUI();
         }
       }, "door"),
+      e("button", {
+        className: props.mode === "sim" ? "active" : "",
+        onClick: ev => {
+          appState.mode = "sim";
+          startSimulation();
+          renderUI();
+        }
+      }, "sim"),
     ),
     e("svg", {viewBox: `0 0 ${MAP_SIZE} ${MAP_SIZE}`},
       // draw rooms
@@ -661,10 +867,10 @@ function WorldEditor(props) {
               else if (canPlaceWall(appState.activeWallAnchor, pegKey)) {
                 // place a wall
                 const updatedWalls = addWall(appState.walls, [appState.activeWallAnchor, pegKey]);
-                console.log("UPDATED", updatedWalls);
+                //console.log("UPDATED", updatedWalls);
                 appState.walls = updatedWalls;
                 const rooms = findRooms(updatedWalls);
-                console.log("ROOMS", rooms);
+                //console.log("ROOMS", rooms);
                 appState.rooms = rooms;
                 buildRoomGraph(appState.rooms, appState.doors);
                 appState.activeWallAnchor = null;
@@ -714,7 +920,7 @@ function WorldEditor(props) {
                 appState.walls = appState.walls.filter(wall => wall[0] !== p1 || wall[1] !== p2);
                 appState.doors = appState.doors.filter(door => door !== wallKey);
                 const rooms = findRooms(appState.walls);
-                console.log("ROOMS", rooms);
+                //console.log("ROOMS", rooms);
                 appState.rooms = rooms;
                 buildRoomGraph(appState.rooms, appState.doors);
                 renderUI();
@@ -750,80 +956,24 @@ function WorldEditor(props) {
           fill: "rgba(255,255,0,0.5)", r: 3,
         }));
       }),
-      // TODO draw guys
-      props.rooms.length > 1 && (() => {
-        const initRoom = randNth(props.rooms);
-        const initRoomKey = initRoom.join(";");
-        const initPositions = pathingPointsInside(initRoom);
-        console.log("initRoom", initRoom, initPositions);
-        if (initPositions.length === 0) {
-          // TODO nowhere to stand in init room :(
-          return null;
-        }
-        const targetRoom = randNth(props.rooms.filter(r => r.join(";") !== initRoomKey));
-        const targetRoomKey = targetRoom.join(";");
-        const targetPositions = pathingPointsInside(targetRoom);
-        console.log("targetRoom", targetRoom, targetPositions);
-        if (targetPositions.length === 0) {
-          // TODO nowhere to stand in target room :(
-          return null;
-        }
-        const roomGraph = buildRoomGraph(props.rooms, props.doors);
-        const roomsAndDoorsPaths = findPaths(roomGraph, initRoomKey, targetRoomKey);
-        roomsAndDoorsPaths.sort((a, b) => a.length - b.length); // shortest paths first
-        console.log("roomsAndDoorsPaths", roomsAndDoorsPaths);
-        if (roomsAndDoorsPaths.length === 0) {
-          // TODO no path from init room to target room :(
-          return null;
-        }
-        const roomsAndDoorsPath = roomsAndDoorsPaths[0];
-        const fullPath = mapcat(roomsAndDoorsPath, (roomOrDoor, idx) => {
-          const points = roomOrDoor.split(";").map(unpackPoint);
-          if (points.length === 2) {
-            // it's a door! yield center
-            return [pointAlong(points[0], points[1], 0.5)];
-          }
-          else if (points.length > 2) {
-            // it's a room! yield path along its navmesh
-            const doors = props.doors.filter(door => roomHasWall(roomOrDoor.split(";"), door));
-            const navmesh = buildNavMesh(points.map(p => p.join(",")), doors);
-            console.log("navmesh", navmesh);
-            const sourceDoor = roomsAndDoorsPath[idx - 1];
-            const targetDoor = roomsAndDoorsPath[idx + 1];
-            console.log("doors", sourceDoor, targetDoor);
-            const navmeshPaths = findPaths(navmesh, sourceDoor, targetDoor);
-            console.log("navmeshPaths", navmeshPaths);
-            navmeshPaths.sort((a, b) => a.length - b.length); // shortest paths first
-            const finalNavmeshPath = navmeshPaths[0] || []; // fallback: straight line thru room
-            // FIXME maybe use centroid or random navmesh point for fallback instead?
-            return finalNavmeshPath.map(pointOrDoor => {
-              const bits = pointOrDoor.split(";")
-              if (bits.length === 1) {
-                return unpackPoint(pointOrDoor);
-              }
-              else if (bits.length === 2) {
-                return pointAlong(...bits.map(unpackPoint), 0.5);
-              }
-              else {
-                // should never get here
-                console.warn("invalid navmesh path component!", pointOrDoor);
-                return [0, 0]; // ???
-              }
-            });
-          }
-          else {
-            // should never get here
-            console.warn("invalid room or door in path!", roomOrDoor);
-            return [];
-          }
-        });
-        console.log("fullPath", fullPath);
-        return e("polyline", {
-          className: "guy-path",
-          points: fullPath.join(" "),
-          stroke: "magenta", strokeWidth: 2, fill: "none",
-        });
-      })(),
+      // draw guys
+      props.mode === "sim" && props.guys.map(guy => {
+        const plannedMoves = [guy.task, ...guy.taskQueue].map(
+          task => task?.type === "move" && task.to
+        ).filter(x => x);
+        const fullPath = [guy.pos, ...plannedMoves];
+        return e("g", {className: "guy-info"},
+          fullPath.length > 0 && e("polyline", {
+            className: "guy-path",
+            points: fullPath.join(" "),
+            stroke: "rgba(255,0,255,0.5)", strokeWidth: 1, fill: "none",
+          }),
+          e("circle", {
+            className: "guy", cx: guy.pos[0], cy: guy.pos[1],
+            fill: "magenta", r: 2,
+          }),
+        );
+      }),
     ),
   );
 }
