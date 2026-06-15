@@ -829,10 +829,10 @@ function uploadFile(cb, opts) {
 // download a JSON file representing the world
 function exportWorld() {
   const dateTimeString = (new Date()).toISOString().split(".")[0].replace("T", "_").replaceAll(":", "-");
-  const filename = `praxland_${dateTimeString}.json`;
+  const filename = `bauprobe_${dateTimeString}.json`;
   const saveState = clone(appState);
   for (const key of Object.keys(saveState)) {
-    if (["walls","rooms","doors"].includes(key)) continue;
+    if (["walls","rooms","doors","roomData"].includes(key)) continue;
     delete saveState[key];
   }
   const contents = JSON.stringify(saveState);
