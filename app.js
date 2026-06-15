@@ -594,6 +594,7 @@ function planPath(initPos, targetPos) {
 // pathing point in the world or waiting for a fixed amount of time.
 function assignRandomGoal(guy) {
   const FALLBACK_GOAL = [{type: "wait", ticksToWait: 100}];
+  if (Math.random() < 0.2) return FALLBACK_GOAL; // randomly wait sometimes
   const possibleTargets = mapcat(appState.rooms, room => pathingPointsInside(room));
   if (possibleTargets.length === 0) {
     // no viable target anywhere, bail out early
@@ -670,7 +671,7 @@ function tickSimulation() {
   for (const guy of appState.guys) {
     if (guy.task) {
       if (hasCompletedCurrentTask(guy)) {
-        console.log("completed task!", guy);
+        //console.log("completed task!", guy);
         delete guy.task;
       }
       else {
@@ -979,15 +980,19 @@ function WorldEditor(props) {
           task => task?.type === "move" && task.to
         ).filter(x => x);
         const fullPath = [guy.pos, ...plannedMoves];
+        const waitProgress = guy.task?.type === "wait" && (guy.task.ticksTaken / guy.task.ticksToWait);
         return e("g", {className: "guy-info"},
           fullPath.length > 0 && e("polyline", {
             className: "guy-path",
             points: fullPath.join(" "),
-            stroke: "rgba(255,0,255,0.5)", strokeWidth: 1, fill: "none",
+            stroke: "rgba(255,0,255,0.5)", fill: "none",
+            strokeWidth: 1, strokeDasharray: 1,
           }),
           e("circle", {
             className: "guy", cx: guy.pos[0], cy: guy.pos[1],
             fill: "magenta", r: 2,
+            stroke: "cyan",
+            strokeWidth: (waitProgress && Math.sin(waitProgress * Math.PI)) || 0,
           }),
         );
       }),
