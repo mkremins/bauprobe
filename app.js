@@ -513,6 +513,19 @@ for (let x = 0; x < GRID_SIZE; x++) {
 
 /// Simulation
 
+// Check if a character can navigate directly along a `line`
+// (consisting of two packed points) without passing through any `walls`.
+function isObstructed(line, walls) {
+  return walls.some(wall => findIntersection(line, wall));
+}
+
+// Return the point in `navmesh` that's nearest to the given (unpacked) `pos`.
+function closestPathingPoint(pos, navmesh) {
+  const pathingPoints = [...Object.keys(navmesh)].map(unpackPoint);
+  pathingPoints.sort((a, b) => distance(a, pos) - distance(b, pos));
+  return pathingPoints[0];
+}
+
 // Given a pair of points `initPos` and `targetPos` (currently assumed to be
 // within rooms but not guaranteed to be pathing points), assemble and return
 // a sequence of points that represent an unobstructed path between them.
@@ -530,10 +543,19 @@ function planPath(initPos, targetPos) {
   );
   const pathingWithinRoom = initRoomKey === targetRoomKey;
   if (pathingWithinRoom) {
-    // TODO hacky shortcut: within-room path is just a straight frickin line.
-    // this should probably instead check for obstructions and path via navmesh
-    // if any obstructions are present.
-    return [targetPos];
+    if (!isObstructed([packedInitPos, packedTargetPos], appState.walls)) {
+      return [targetPos]; // no obstructions, just beeline to target
+    }
+    // there's a wall between initPos and targetPos, use the navmesh to avoid it
+    const navmesh = appState.navmeshes[initRoomKey];
+    const nearPathingPos = closestPathingPoint(initPos, navmesh).join(",");
+    const farPathingPos = closestPathingPoint(targetPos, navmesh).join(",");
+    const navmeshPath = bfs(navmesh, nearPathingPos, farPathingPos);
+    if (!navmeshPath) {
+      console.warn("no path within room?!", initRoomKey, initPos, targetPos);
+      return null;
+    }
+    return [...navmeshPath.map(unpackPoint), targetPos];
   }
   // TODO below is fully copy-pasted from earlier pathing logic, probably has issues
   // - no proper navigation from initPos to first door, or last door to targetPos
