@@ -221,8 +221,9 @@ function addWall(oldWalls, newWall) {
       const oldWallSplits = splitsPerOldWall[oldWallKey] || [];
       return splitWall(oldWall, Array.from(oldWallSplits));
     });
-    // TODO there is a minor bug where we can sometimes add zero-length sections,
-    // not sure where best to filter
+    // FIXME there's a bug where we can sometimes add zero-length sections;
+    // this is currently being filtered downstream in `rebuildWorld`,
+    // but we might want to move this filtering upstream
     return distinctBy(
       section => { const sig = clone(section); sig.sort(); return sig.join(";"); },
       updatedOldWalls.concat(newWallSections),
@@ -450,9 +451,41 @@ function buildNavMesh(room, doors) {
   return adjacencies;
 }
 
+// Given an updated list of `walls` and `doors`, do all of the following:
+// - Clean up ghost walls and ghost doors if any
+// - Identify rooms
+// - Build room graph
+// - Build per-room navmeshes
+// ...and return an updated `world` datastructure wrapping all of the above.
+// `walls` are represented as two-element arrays of packed (string) points.
+// `doors` are represented as wall keys.
+function rebuildWorld(walls, doors) {
+  // clean up ghost walls if any
+  walls = walls.filter(wall => wall[0] !== wall[1]);
+  // clean up ghost doors if any
+  doors = doors.filter(door => {
+    const doorPoints = door.split(";");
+    return walls.find(([p1, p2]) => doorPoints.includes(p1) && doorPoints.includes(p2));
+  });
+  // identify rooms, build room graph
+  const rooms = findRooms(walls);
+  const roomGraph = buildRoomGraph(rooms, doors);
+  // build a navmesh for every room
+  const navmeshes = {};
+  for (const room of rooms) {
+    const roomKey = room.join(";");
+    const doorsToRoom = doors.filter(door => roomHasWall(room, door));
+    navmeshes[roomKey] = buildNavMesh(room, doorsToRoom);
+  }
+  // return a bundle of updated world info
+  const world = {walls, doors, rooms, roomGraph, navmeshes};
+  console.log("UPDATED WORLD", world);
+  return world;
+}
+
 /// App state
 
-const appState = {
+let appState = {
   pegs: [],
   walls: [],
   rooms: [],
@@ -504,8 +537,7 @@ function planPath(initPos, targetPos) {
   // TODO below is fully copy-pasted from earlier pathing logic, probably has issues
   // - no proper navigation from initPos to first door, or last door to targetPos
   // - no straight-line shortcutting if door->door path is unobstructed
-  const roomGraph = buildRoomGraph(appState.rooms, appState.doors);
-  const roomsAndDoorsPaths = findPaths(roomGraph, initRoomKey, targetRoomKey);
+  const roomsAndDoorsPaths = findPaths(appState.roomGraph, initRoomKey, targetRoomKey);
   roomsAndDoorsPaths.sort((a, b) => a.length - b.length); // shortest paths first
   console.log("roomsAndDoorsPaths", roomsAndDoorsPaths);
   if (roomsAndDoorsPaths.length === 0) {
@@ -521,8 +553,7 @@ function planPath(initPos, targetPos) {
     }
     else if (points.length > 2) {
       // it's a room! yield path along its navmesh
-      const doors = appState.doors.filter(door => roomHasWall(roomOrDoor.split(";"), door));
-      const navmesh = buildNavMesh(points.map(p => p.join(",")), doors);
+      const navmesh = appState.navmeshes[roomOrDoor];
       console.log("navmesh", navmesh);
       const sourceDoor = roomsAndDoorsPath[idx - 1];
       const targetDoor = roomsAndDoorsPath[idx + 1];
@@ -739,9 +770,7 @@ function exportWorld() {
 function importWorld() {
   uploadFile(contents => {
     const saveState = JSON.parse(contents);
-    for (const key of Object.keys(saveState)) {
-      appState[key] = saveState[key];
-    }
+    appState = {...appState, ...rebuildWorld(saveState.walls, saveState.doors)};
   }, {fileType: "json"});
 }
 
@@ -867,12 +896,7 @@ function WorldEditor(props) {
               else if (canPlaceWall(appState.activeWallAnchor, pegKey)) {
                 // place a wall
                 const updatedWalls = addWall(appState.walls, [appState.activeWallAnchor, pegKey]);
-                //console.log("UPDATED", updatedWalls);
-                appState.walls = updatedWalls;
-                const rooms = findRooms(updatedWalls);
-                //console.log("ROOMS", rooms);
-                appState.rooms = rooms;
-                buildRoomGraph(appState.rooms, appState.doors);
+                appState = {...appState, ...rebuildWorld(updatedWalls, appState.doors)};
                 appState.activeWallAnchor = null;
                 renderUI();
               }
@@ -914,15 +938,9 @@ function WorldEditor(props) {
             },
             onClick: ev => {
               if (props.mode === "delete") {
-                // DELETE MODE: get rid of this wall,
-                // delete its associated door too if any,
-                // and recalc rooms
+                // DELETE MODE: get rid of this wall and recalc rooms
                 appState.walls = appState.walls.filter(wall => wall[0] !== p1 || wall[1] !== p2);
-                appState.doors = appState.doors.filter(door => door !== wallKey);
-                const rooms = findRooms(appState.walls);
-                //console.log("ROOMS", rooms);
-                appState.rooms = rooms;
-                buildRoomGraph(appState.rooms, appState.doors);
+                appState = {...appState, ...rebuildWorld(appState.walls, appState.doors)};
                 renderUI();
               }
               else if (props.mode === "door") {
@@ -934,7 +952,7 @@ function WorldEditor(props) {
                 else {
                   appState.doors.push(wallKey);
                 }
-                buildRoomGraph(appState.rooms, appState.doors);
+                appState = {...appState, ...rebuildWorld(appState.walls, appState.doors)};
                 renderUI();
               }
             }
