@@ -651,11 +651,10 @@ function keepDoingCurrentTask(guy) {
 function startDoingNextTask(guy) {
   const task = guy.taskQueue.shift();
   if (task.type === "move") {
+    const MOVE_SPEED = 0.5;
     task.from = guy.pos;
     task.amount = 0;
-    const dist = distance(task.from, task.to);
-    const amountPerFrame = 0.05; // TODO `DIST_PER_FRAME` as fraction of dist?
-    task.amountPerFrame = amountPerFrame;
+    task.amountPerFrame = MOVE_SPEED / distance(task.from, task.to);
   }
   else if (task.type === "wait") {
     task.ticksTaken = 0;
