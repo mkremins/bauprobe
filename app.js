@@ -496,6 +496,40 @@ function rebuildWorld(world) {
   return newWorld;
 }
 
+// Given a `world` datastructure with a `roomGraph` and optional `roomData`,
+// build and return a list of Praxish database facts that expose information
+// about room tags and room connectivity to social actors.
+function exportRoomData(world) {
+  const sentences = [];
+  const roomNames = {};
+  // first expose room data (tags) if any
+  for (const room of world.rooms) {
+    const roomKey = room.join(";");
+    const roomData = world.roomData?.[roomKey];
+    const tags = roomData?.tags?.trim().split(/\s+/) || [];
+    const roomName = tags[0] || roomKey;
+    roomNames[roomKey] = roomName;
+    for (const tag of tags.filter(str => str.length > 0)) {
+      sentences.push(`room.${roomName}.tag.${tag}`);
+    }
+  }
+  // then expose connected rooms: other rooms connected to this room's doors
+  for (const room of world.rooms) {
+    const roomKey = room.join(";");
+    const roomName = roomNames[roomKey];
+    const doors = world.roomGraph[roomKey];
+    const connectedRoomKeys = mapcat(
+      doors, door => world.roomGraph[door] || []
+    ).filter(rk => rk !== roomKey);
+    for (const connected of connectedRoomKeys) {
+      const connectedName = roomNames[connected];
+      sentences.push(`room.${roomName}.connected.${connectedName}`);
+      sentences.push(`room.${connectedName}.connected.${roomName}`);
+    }
+  }
+  return sentences;
+}
+
 /// App state
 
 let appState = {
