@@ -452,19 +452,22 @@ function buildNavMesh(room, doors) {
   return adjacencies;
 }
 
-// Given an updated list of `walls` and `doors`, do all of the following:
+// Given a `world` datastructure containing at minimum `walls` and `doors`,
+// and perhaps containing other stuff (e.g., `roomData`), rebuild all derived
+// world data:
 // - Clean up ghost walls and ghost doors if any
 // - Identify rooms
 // - Build room graph
 // - Build per-room navmeshes
-// ...and return an updated `world` datastructure wrapping all of the above.
+// - Copy over room data as appropriate
+// ...and return an updated datastructure wrapping all of the above.
 // `walls` are represented as two-element arrays of packed (string) points.
 // `doors` are represented as wall keys.
-function rebuildWorld(walls, doors) {
+function rebuildWorld(world) {
   // clean up ghost walls if any
-  walls = walls.filter(wall => wall[0] !== wall[1]);
+  const walls = world.walls.filter(wall => wall[0] !== wall[1]);
   // clean up ghost doors if any
-  doors = doors.filter(door => {
+  const doors = world.doors.filter(door => {
     const doorPoints = door.split(";");
     return walls.find(([p1, p2]) => doorPoints.includes(p1) && doorPoints.includes(p2));
   });
@@ -478,16 +481,19 @@ function rebuildWorld(walls, doors) {
     const doorsToRoom = doors.filter(door => roomHasWall(room, door));
     navmeshes[roomKey] = buildNavMesh(room, doorsToRoom);
   }
-  // set up room data (TODO preserve from past iterations where possible)
+  // set up room data
   const roomData = {};
   for (const room of rooms) {
     const roomKey = room.join(";");
-    roomData[roomKey] = {tags: ""};
+    const oldData = world.roomData[roomKey];
+    // TODO this logic will preserve existing room data very conservatively;
+    // we should try to be more proactive about shape matching in the future
+    roomData[roomKey] = oldData || {tags: ""};
   }
   // return a bundle of updated world info
-  const world = {walls, doors, rooms, roomGraph, navmeshes, roomData};
-  console.log("UPDATED WORLD", world);
-  return world;
+  const newWorld = {walls, doors, rooms, roomGraph, navmeshes, roomData};
+  console.log("UPDATED WORLD", newWorld);
+  return newWorld;
 }
 
 /// App state
@@ -843,7 +849,7 @@ function exportWorld() {
 function importWorld() {
   uploadFile(contents => {
     const saveState = JSON.parse(contents);
-    appState = {...appState, ...rebuildWorld(saveState.walls, saveState.doors)};
+    appState = {...appState, ...rebuildWorld(saveState)};
   }, {fileType: "json"});
 }
 
@@ -981,8 +987,8 @@ function WorldEditor(props) {
               }
               else if (canPlaceWall(appState.activeWallAnchor, pegKey)) {
                 // place a wall
-                const updatedWalls = addWall(appState.walls, [appState.activeWallAnchor, pegKey]);
-                appState = {...appState, ...rebuildWorld(updatedWalls, appState.doors)};
+                appState.walls = addWall(appState.walls, [appState.activeWallAnchor, pegKey]);
+                appState = {...appState, ...rebuildWorld(appState)};
                 appState.activeWallAnchor = null;
                 renderUI();
               }
@@ -1026,7 +1032,7 @@ function WorldEditor(props) {
               if (props.mode === "delete") {
                 // DELETE MODE: get rid of this wall and recalc rooms
                 appState.walls = appState.walls.filter(wall => wall[0] !== p1 || wall[1] !== p2);
-                appState = {...appState, ...rebuildWorld(appState.walls, appState.doors)};
+                appState = {...appState, ...rebuildWorld(appState)};
                 renderUI();
               }
               else if (props.mode === "door") {
@@ -1038,7 +1044,7 @@ function WorldEditor(props) {
                 else {
                   appState.doors.push(wallKey);
                 }
-                appState = {...appState, ...rebuildWorld(appState.walls, appState.doors)};
+                appState = {...appState, ...rebuildWorld(appState)};
                 renderUI();
               }
             }
