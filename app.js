@@ -557,16 +557,61 @@ function planPath(initPos, targetPos) {
     }
     return [...navmeshPath.map(unpackPoint), targetPos];
   }
-  // TODO below is fully copy-pasted from earlier pathing logic, probably has issues
-  // - no proper navigation from initPos to first door, or last door to targetPos
-  // - no straight-line shortcutting if door->door path is unobstructed
   const roomsAndDoorsPath = bfs(appState.roomGraph, initRoomKey, targetRoomKey);
   console.log("roomsAndDoorsPath", roomsAndDoorsPath);
   if (!roomsAndDoorsPath) {
     // no path from init room to target room :(
     return null;
   }
+  const pathPrefix = (() => {
+    // this is the beginning of the path (the room we're already in).
+    // beeline to first door if unobstructed...
+    const firstDoor = roomsAndDoorsPath[0];
+    const [doorP1, doorP2] = firstDoor.split(";").map(unpackPoint);
+    const firstDoorPos = pointAlong(doorP1, doorP2, 0.5).join(",");
+    const relevantWalls = appState.walls.filter(
+      // exclude the wall containing the target door
+      wall => !wall.includes(doorP1.join(",")) || !wall.includes(doorP2.join(","))
+    );
+    if (!isObstructed([packedInitPos, firstDoorPos], relevantWalls)) {
+      return []; // no obstructions, just beeline to first door
+    }
+    // ...else navmesh path from closest pathing point
+    const navmesh = appState.navmeshes[initRoomKey];
+    const nearPathingPos = closestPathingPoint(initPos, navmesh).join(",");
+    const navmeshPath = bfs(navmesh, nearPathingPos, firstDoor);
+    if (!navmeshPath) {
+      console.warn("no path to door?!", initRoomKey, initPos, firstDoor);
+      return null;
+    }
+    navmeshPath.pop(); // exclude final point (the door) to avoid pausing there
+    return navmeshPath.map(unpackPoint);
+  })();
   const innerPath = mapcat(roomsAndDoorsPath, (roomOrDoor, idx) => {
+    if (roomOrDoor === targetRoomKey) {
+      // this is the end of the path (the target room).
+      // beeline from last door if unobstructed...
+      const lastDoor = roomsAndDoorsPath[idx - 1];
+      const [doorP1, doorP2] = lastDoor.split(";").map(unpackPoint);
+      const lastDoorPos = pointAlong(doorP1, doorP2, 0.5).join(",");
+      const relevantWalls = appState.walls.filter(
+        // exclude the wall containing the target door
+        wall => !wall.includes(doorP1.join(",")) || !wall.includes(doorP2.join(","))
+      );
+      if (!isObstructed([lastDoorPos, packedTargetPos], relevantWalls)) {
+        return []; // no obstructions, just beeline to first door
+      }
+      // ...else navmesh path from closest pathing point
+      const navmesh = appState.navmeshes[targetRoomKey];
+      const nearPathingPos = closestPathingPoint(targetPos, navmesh).join(",");
+      const navmeshPath = bfs(navmesh, lastDoor, nearPathingPos);
+      if (!navmeshPath) {
+        console.warn("no path from door?!", targetRoomKey, lastDoor, targetPos);
+        return null;
+      }
+      navmeshPath.pop(); // exclude final point (the door) to avoid pausing there
+      return navmeshPath.map(unpackPoint);
+    }
     const points = roomOrDoor.split(";").map(unpackPoint);
     if (points.length === 2) {
       // it's a door! yield center
@@ -574,6 +619,7 @@ function planPath(initPos, targetPos) {
     }
     else if (points.length > 2) {
       // it's a room! yield path along its navmesh
+      // TODO or a straight-line shortcut if door->door path is unobstructed?
       const navmesh = appState.navmeshes[roomOrDoor];
       console.log("navmesh", navmesh);
       const sourceDoor = roomsAndDoorsPath[idx - 1];
@@ -604,7 +650,7 @@ function planPath(initPos, targetPos) {
       return [];
     }
   });
-  const fullPath = [initPos, ...innerPath, targetPos];
+  const fullPath = [initPos, ...pathPrefix, ...innerPath, targetPos];
   console.log("fullPath", fullPath);
   return fullPath;
 }
