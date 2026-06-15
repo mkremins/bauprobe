@@ -478,8 +478,14 @@ function rebuildWorld(walls, doors) {
     const doorsToRoom = doors.filter(door => roomHasWall(room, door));
     navmeshes[roomKey] = buildNavMesh(room, doorsToRoom);
   }
+  // set up room data (TODO preserve from past iterations where possible)
+  const roomData = {};
+  for (const room of rooms) {
+    const roomKey = room.join(";");
+    roomData[roomKey] = {tags: ""};
+  }
   // return a bundle of updated world info
-  const world = {walls, doors, rooms, roomGraph, navmeshes};
+  const world = {walls, doors, rooms, roomGraph, navmeshes, roomData};
   console.log("UPDATED WORLD", world);
   return world;
 }
@@ -496,6 +502,7 @@ let appState = {
   latestWall: null,
   mode: "delete", // "delete" or "door" or "sim" atm
   guys: [], // has pos, task, taskQueue
+  roomData: {}, // keyed by roomKey, must gc when rooms change
 };
 
 // init pegs
@@ -862,11 +869,22 @@ function App(props) {
 function RoomInspector(props) {
   return e("div", {className: "room-inspector"},
     props.rooms.map((room, roomIdx) => {
+      const roomKey = room.join(";");
+      const roomData = props.roomData[roomKey] || {tags: ""};
       return e("div", {
           className: "room-data",
           style: {background: ROOM_COLORS[roomIdx % ROOM_COLORS.length]}
         },
         e("h3", {}, "Room " + roomIdx),
+        e("input", {
+          type: "text",
+          value: roomData.tags,
+          onChange: ev => {
+            appState.roomData[roomKey].tags = ev.target.value;
+            renderUI();
+          },
+          placeholder: "tags here…",
+        }),
       );
     }),
   );
@@ -922,7 +940,9 @@ function WorldEditor(props) {
     e("svg", {viewBox: `0 0 ${MAP_SIZE} ${MAP_SIZE}`},
       // draw rooms
       props.rooms.map((room, roomIdx) => {
+        const roomKey = room.join(";");
         return e("polygon", {
+          key: roomKey,
           className: "room", points: room.join(" "),
           fill: ROOM_COLORS[roomIdx % ROOM_COLORS.length],
         });

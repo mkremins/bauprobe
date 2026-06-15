@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Praxish Demo: Space</title>
+	<title>Praxish Demo: Bauprobe</title>
 	<style>
 	* { box-sizing: border-box; margin: 0; padding: 0; }
 	body { font-family: sans-serif; line-height: 1.2; padding: 2ch; }
@@ -16,11 +16,14 @@
 	button.active { background: forestgreen; color: white; }
 	.room-inspector { width: 50%; padding: 1ch; }
 	.room-data { margin-bottom: 0.5rem; padding: 0.5ch; border-radius: 0.5ch; }
+	.room-data h3 { display: inline-block; margin-right: 1ch; }
+	.room-data input { all: unset; width: 80%; color: #555; }
+	.room-data input::placeholder { font-style: italic; color: #999; }
 	</style>
 </head>
 <body>
-	<h1>Praxish Demo: Space</h1>
-	<p>This is a demo of the <a href="https://github.com/mkremins/praxish">Praxish framework</a> for constructing interactive narrative social simulations, specifically focused on how Praxish simulations can be combined with realtime gameplay in a navigable world.</p>
+	<h1>Praxish Demo: Bauprobe</h1>
+	<p>This is a demo of the <a href="https://github.com/mkremins/praxish">Praxish framework</a> for constructing interactive narrative social simulations, specifically focused on how Praxish simulations can be combined with realtime gameplay in a navigable world. Use the world editor on the left to build a room and the rooms list on the right to assign Praxish-visible tags to each room, then hit the <code>sim</code> button to turn some agents loose.</p>
 	<div id="app"></div>
 	<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
