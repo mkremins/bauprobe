@@ -26,27 +26,28 @@ function distinctBy(f, xs) {
   return ys;
 }
 
-function findPaths(graph, init, target) {
-  let activeTraversals = [[init]];
-  const validPaths = [];
-  while (activeTraversals.length > 0) {
-    activeTraversals = mapcat(activeTraversals, path => {
-      const here = path.at(-1);
-      if (here === target) {
-        // we found it!
-        validPaths.push(path);
-        return [];
+function bfs(graph, init, target) {
+  const queue = [init];
+  const parent = {};
+  while (queue.length > 0) {
+    const here = queue.shift();
+    if (here === target) {
+      // reconstruct path
+      const path = [];
+      let prev = here;
+      while (prev !== init) {
+        path.push(prev);
+        prev = parent[prev];
       }
-      const nexts = graph[here] || [];
-      const unseenNexts = nexts.filter(next => !path.includes(next));
-      return unseenNexts.map(next => {
-        const newPath = clone(path);
-        newPath.push(next);
-        return newPath;
-      });
-    });
+      return path.reverse();
+    }
+    for (const next of graph[here] || []) {
+      if (parent[next]) continue; // seen it already
+      queue.push(next);
+      parent[next] = here;
+    }
   }
-  return validPaths;
+  return null; // never found target
 }
 
 /// Geometry
@@ -537,14 +538,12 @@ function planPath(initPos, targetPos) {
   // TODO below is fully copy-pasted from earlier pathing logic, probably has issues
   // - no proper navigation from initPos to first door, or last door to targetPos
   // - no straight-line shortcutting if door->door path is unobstructed
-  const roomsAndDoorsPaths = findPaths(appState.roomGraph, initRoomKey, targetRoomKey);
-  roomsAndDoorsPaths.sort((a, b) => a.length - b.length); // shortest paths first
-  console.log("roomsAndDoorsPaths", roomsAndDoorsPaths);
-  if (roomsAndDoorsPaths.length === 0) {
+  const roomsAndDoorsPath = bfs(appState.roomGraph, initRoomKey, targetRoomKey);
+  console.log("roomsAndDoorsPath", roomsAndDoorsPath);
+  if (!roomsAndDoorsPath) {
     // no path from init room to target room :(
     return null;
   }
-  const roomsAndDoorsPath = roomsAndDoorsPaths[0];
   const innerPath = mapcat(roomsAndDoorsPath, (roomOrDoor, idx) => {
     const points = roomOrDoor.split(";").map(unpackPoint);
     if (points.length === 2) {
@@ -558,10 +557,9 @@ function planPath(initPos, targetPos) {
       const sourceDoor = roomsAndDoorsPath[idx - 1];
       const targetDoor = roomsAndDoorsPath[idx + 1];
       console.log("doors", sourceDoor, targetDoor);
-      const navmeshPaths = findPaths(navmesh, sourceDoor, targetDoor);
-      console.log("navmeshPaths", navmeshPaths);
-      navmeshPaths.sort((a, b) => a.length - b.length); // shortest paths first
-      const finalNavmeshPath = navmeshPaths[0] || []; // fallback: straight line thru room
+      const navmeshPath = bfs(navmesh, sourceDoor, targetDoor);
+      console.log("navmeshPath", navmeshPath);
+      const finalNavmeshPath = navmeshPath || []; // fallback: straight line thru room
       // FIXME maybe use centroid or random navmesh point for fallback instead?
       return finalNavmeshPath.map(pointOrDoor => {
         const bits = pointOrDoor.split(";")
