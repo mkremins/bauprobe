@@ -58,7 +58,23 @@ Domain.practices.push({
         "insert dm.Actor.markBusy.100.speaking",
         "insert dm.Other.markBusy.100.speaking",
       ],
-    }
+    },
+    {
+      name: "[Actor]: Start flirting with [Other]",
+      conditions: [
+        "char.Actor.at.Room",
+        "char.Other.at.Room",
+        "neq Actor Other",
+        // TODO need to check Other not busy?
+        "not practice.flirt.Actor.Other",
+        "not practice.flirt.Other.Actor",
+      ],
+      outcomes: [
+        "insert practice.flirt.Actor.Other",
+        "insert dm.Actor.markBusy.100.flirting",
+        "insert dm.Other.markBusy.100.looking",
+      ],
+    },
   ]
 });
 
@@ -152,6 +168,161 @@ Domain.practices.push({
     ],
     score: 0.5,
   }]
+});
+
+Domain.practices.push({
+  id: "flirt",
+  name: "[Initiator] is flirting with [Responder]",
+  roles: ["Initiator", "Responder"],
+  init: [
+    "insert practice.flirt.Initiator.Responder.member.Initiator",
+    "insert practice.flirt.Initiator.Responder.member.Responder",
+    "insert practice.flirt.Initiator.Responder.heat.0",
+  ],
+  actions: [
+    {
+      name: "[Actor]: Flirt with [Other]",
+      conditions: [
+        "practice.flirt.Initiator.Responder.member.Actor",
+        "practice.flirt.Initiator.Responder.member.Other",
+        "neq Actor Other",
+        "char.Actor.at.Room",
+        "char.Other.at.Room",
+        // TODO need to check Other not busy?
+        "practice.flirt.Initiator.Responder.heat.Heat",
+        "calc NextHeat add Heat 1",
+      ],
+      outcomes: [
+        "insert practice.flirt.Initiator.Responder.heat!NextHeat",
+        "insert dm.Actor.markBusy.100.flirting",
+        //"insert dm.Other.markBusy.100.looking",
+      ],
+      influences: [{
+        name: "If you're flirting... keep flirting",
+        conditions: [],
+        score: 2,
+      },
+      {
+        name: "It's easier to flirt in private",
+        conditions: [
+          "room.Room.tag.secluded",
+        ],
+        score: 1,
+      }],
+    },
+    {
+      name: "[Actor]: Proposition [Other]",
+      conditions: [
+        "not practice.flirt.Initiator.Responder.status.makeOrBreak",
+        "practice.flirt.Initiator.Responder.member.Actor",
+        "practice.flirt.Initiator.Responder.member.Other",
+        "neq Actor Other",
+        "char.Actor.at.Room",
+        "char.Other.at.Room",
+        // TODO need to check Other not busy?
+        "practice.flirt.Initiator.Responder.heat.Heat",
+        "gt Heat 3",
+      ],
+      outcomes: [
+        "insert practice.flirt.Initiator.Responder.status!makeOrBreak.Actor",
+        "insert dm.Actor.markBusy.100.smirking",
+        //"insert dm.Other.markBusy.100.looking",
+      ],
+      influences: [{
+        name: "The flirting keeps escalating",
+        conditions: [
+          "practice.flirt.Initiator.Responder.heat.Heat",
+          "gt Heat 3",
+          "calc AdjustedHeat sub Heat 2",
+        ],
+        score: "AdjustedHeat",
+      }],
+    },
+    {
+      name: "[Actor]: Accept [Other]'s proposition",
+      conditions: [
+        "practice.flirt.Initiator.Responder.status.makeOrBreak.Other",
+        "practice.flirt.Initiator.Responder.member.Actor",
+        "practice.flirt.Initiator.Responder.member.Other",
+        "neq Actor Other",
+        "char.Actor.at.Room",
+        "char.Other.at.Room",
+        // TODO need to check Other not busy?
+        "room.TargetRoom.tag.secluded",
+      ],
+      outcomes: [
+        // reset flirtation state
+        "delete practice.flirt.Initiator.Responder.status",
+        "insert practice.flirt.Initiator.Responder.heat!0",
+        // send them to the TargetRoom to make out
+        "insert practice.makeout.Actor.Other",
+        "insert dm.Actor.planPath.TargetRoom",
+        "insert dm.Other.planPath.TargetRoom",
+      ],
+      influences: [{
+        name: "The ball's in your court",
+        conditions: [],
+        priority: "required",
+      }],
+    },
+    {
+      name: "[Actor]: Reject [Other]'s proposition",
+      conditions: [
+        "practice.flirt.Initiator.Responder.status.makeOrBreak.Other",
+        "practice.flirt.Initiator.Responder.member.Actor",
+        "practice.flirt.Initiator.Responder.member.Other",
+        "neq Actor Other",
+        "char.Actor.at.Room",
+        "char.Other.at.Room",
+        // TODO need to check Other not busy?
+      ],
+      outcomes: [
+        "delete practice.flirt.Initiator.Responder.status",
+        "insert practice.flirt.Initiator.Responder.heat!0",
+        "insert dm.Actor.markBusy.100.rejecting",
+        "insert dm.Other.markBusy.100.shrugging",
+      ],
+      influences: [{
+        name: "The ball's in your court",
+        conditions: [],
+        priority: "required",
+      }],
+    },
+  ]
+});
+
+Domain.practices.push({
+  id: "makeout",
+  name: "[Initiator] is making out with [Responder]",
+  roles: ["Initiator", "Responder"],
+  init: [
+    "insert practice.makeout.Initiator.Responder.member.Initiator",
+    "insert practice.makeout.Initiator.Responder.member.Responder",
+  ],
+  actions: [
+    {
+      name: "[Actor]: Make out with [Other]",
+      conditions: [
+        "practice.makeout.Initiator.Responder.member.Actor",
+        "practice.makeout.Initiator.Responder.member.Other",
+        "neq Actor Other",
+        "char.Actor.at.Room",
+        "char.Other.at.Room",
+        "room.Room.tag.secluded",
+        // TODO need to check Other not busy?
+      ],
+      outcomes: [
+        "insert dm.Actor.markBusy.500.kissing",
+        "insert dm.Other.markBusy.500.kissing",
+        "delete practice.makeout.Initiator.Responder",
+      ],
+      influences: [{
+        name: "We came here for a reason",
+        conditions: [],
+        priority: "required",
+      }],
+    },
+  ]
 });
 
 Domain.initSentences = [
