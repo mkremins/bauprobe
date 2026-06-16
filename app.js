@@ -801,7 +801,7 @@ function planPath(initPos, targetPos) {
 // pathing point in the world or waiting for a fixed amount of time.
 function assignRandomGoal(guy) {
   const FALLBACK_GOAL = [{type: "wait", ticksToWait: 100}];
-  if (Math.random() < 0.2) return FALLBACK_GOAL; // randomly wait sometimes
+  if (Math.random() < 0.5) return FALLBACK_GOAL; // randomly wait sometimes
   const possibleTargets = mapcat(appState.rooms, room => pathingPointsInside(room));
   if (possibleTargets.length === 0) {
     // no viable target anywhere, bail out early
@@ -1219,6 +1219,7 @@ function WorldEditor(props) {
           })
         );
       }),
+      /*
       // draw pathing points debug view
       props.rooms.length > 0 && props.rooms.map(room => {
         const pathingPoints = pathingPointsInside(room);
@@ -1228,6 +1229,7 @@ function WorldEditor(props) {
           fill: "rgba(255,255,0,0.5)", r: 3,
         }));
       }),
+      */
       // draw guys
       props.mode === "sim" && props.guys.map(guy => {
         const plannedMoves = [guy.task, ...guy.taskQueue].map(
@@ -1236,6 +1238,7 @@ function WorldEditor(props) {
         const fullPath = [guy.pos, ...plannedMoves];
         const taskType = guy.task?.type;
         const doingStationaryTask = taskType === "wait" || taskType === "busy";
+        const taskIcon = {greeting: "👋"}[guy.task?.reason];
         const taskProgress = doingStationaryTask && (guy.task.ticksTaken / guy.task.ticksToWait);
         return e("g", {className: "guy-info"},
           fullPath.length > 0 && e("polyline", {
@@ -1250,6 +1253,11 @@ function WorldEditor(props) {
             stroke: {wait: "cyan", busy: "yellow"}[taskType] || "none",
             strokeWidth: (taskProgress && Math.sin(taskProgress * Math.PI)) || 0,
           }),
+          taskIcon && e("text", {
+            x: guy.pos[0], y: guy.pos[1],
+            textAnchor: "middle", dominantBaseline: "middle",
+            fontSize: 8 + (Math.sin(taskProgress * Math.PI) * 2),
+          }, taskIcon),
         );
       }),
     ),
