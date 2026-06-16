@@ -602,12 +602,12 @@ function takePraxishTurn(guy) {
     if (instruction.InstructionType === "planPath") {
       const roomName = instruction.Argument;
       // find room with given room name if any
-      const roomKey = Object.entries(appState.roomData).find((roomKey, data) => {
-        return data.tags.startsWith(roomName) ? roomKey : null;
-      }) || roomName;
+      const roomKey = Object.entries(appState.roomData).find(([roomKey, data]) => {
+        return data.tags?.startsWith(roomName) ? roomKey : null;
+      })?.[0] || roomName;
       // pick random pathing point inside room
       const navmesh = appState.navmeshes[roomKey];
-      const pathingPoints = Object.keys(navmesh);
+      const pathingPoints = Object.keys(navmesh).filter(p => p.split(";").length === 1);
       if (pathingPoints.length === 0) {
         console.warn("No pathing points in target room!", guy, roomName, roomKey, navmesh);
         return false; // TODO roll back action since it can't be completed?
@@ -904,7 +904,7 @@ function tickSimulation() {
         const room = appState.rooms.find(room => pointInsidePolygon(packedGuyPos, room));
         if (room) {
           const roomKey = room.join(";");
-          const roomName = appState.roomData[roomKey]?.tag?.trim().split(/s+/)[0] || roomKey;
+          const roomName = appState.roomData[roomKey]?.tags?.trim().split(/\s+/)[0] || roomKey;
           Praxish.performOutcome(appPraxishState, `insert char.${guy.name}.at!${roomName}`);
         }
         else {
