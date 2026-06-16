@@ -580,6 +580,34 @@ function exportRoomData(world) {
   return sentences;
 }
 
+// Given a sorted list of `actions`, use a weighted random selection procedure
+// to decide which action to actually perform.
+function selectNPCAction(actions) {
+  // Priority pass: permit only top-priority actions to be picked.
+  const topPriority = actions[0].priority;
+  const topPriorityActions = takeWhile(act => act.priority === topPriority, actions);
+  // Positive score pass: restrict to positive-score actions if at all possible.
+  const positiveScoreActions = takeWhile(act => act.score > 0, topPriorityActions);
+  if (positiveScoreActions.length > 0) {
+    // Top-k pass: restrict to a few of the highest-scoring actions.
+    const k = 3; // Use `topPriorityActions.length` if you don't want a top-k cutoff
+    const topKActions = topPriorityActions.slice(0, k);
+    // Weighted random pass: select an action using weighted random choice.
+    // Weights are given by the top k actions' (uniformly positive) scores,
+    // self-multiplied to bias selection in favor of higher-scoring actions.
+    return weightedRandomChoice(topKActions, act => Math.pow(act.score, 3));
+  }
+  else {
+    // Top-score pass: there are no positive-score actions, so grab the score
+    // of the *least bad* possible action and restrict to actions that are tied
+    // for that score.
+    const topScore = topPriorityActions[0].score;
+    const topScoringActions = takeWhile(act => act.score === topScore, topPriorityActions);
+    // Uniform random pass: select a random top-scoring action.
+    return randNth(topScoringActions);
+  }
+}
+
 function takePraxishTurn(guy) {
   // i guess we're assuming the guy is untasked at this point?
   const possibleActions = Swaygent.scoreActions(appPraxishState, guy) || [];
@@ -589,7 +617,7 @@ function takePraxishTurn(guy) {
   }
   const impossibleActions = possibleActions.impossibleActions;
   console.log("Considering actions", {guy, possibleActions, impossibleActions});
-  const action = possibleActions[0]; // TODO better selection logic
+  const action = selectNPCAction(possibleActions);
   console.log("Performing action :: ", action);
   Praxish.performAction(appPraxishState, action);
   // query for and execute any newly added DM instructions
