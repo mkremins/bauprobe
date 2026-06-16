@@ -23,11 +23,18 @@
 </head>
 <body>
 	<h1>Praxish Demo: Bauprobe</h1>
-	<p>This is a demo of the <a href="https://github.com/mkremins/praxish">Praxish framework</a> for constructing interactive narrative social simulations, specifically focused on how Praxish simulations can be combined with realtime gameplay in a navigable world. Use the world editor on the left to build a room and the rooms list on the right to assign Praxish-visible tags to each room, then hit the <code>sim</code> button to turn some agents loose.</p>
+	<p>This is a demo of the <a href="https://github.com/mkremins/praxish">Praxish framework</a> for constructing interactive narrative social simulations, specifically focused on how Praxish simulations can be combined with realtime gameplay in a navigable world. Use the world editor on the left to build an environment and the rooms list on the right to assign Praxish-visible tags to each room, then hit the <code>sim</code> button to turn some agents loose.</p>
 	<div id="app"></div>
+	<!-- React -->
 	<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-	<script src="util.js"></script>
+	<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+	<!-- Praxish (local vendored version) -->
+	<script src="vendor/praxish/util.js"></script>
+	<script src="vendor/praxish/db.js"></script>
+	<script src="vendor/praxish/praxish.js"></script>
+	<script src="vendor/praxish/swaygent.js"></script>
+	<!-- Bauprobe -->
+	<script src="domain.js"></script>
 	<script src="app.js"></script>
 </body>
 </html>

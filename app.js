@@ -380,7 +380,6 @@ function roomHasWall(room, wall) {
 function buildRoomGraph(rooms, doors) {
   const adjacencies = {};
   for (const door of doors) {
-    //console.log("eval door...", door);
     const roomsJoinedByDoor = rooms.filter(room => roomHasWall(room, door));
     for (const room of roomsJoinedByDoor) {
       const roomKey = room.join(";");
@@ -390,7 +389,6 @@ function buildRoomGraph(rooms, doors) {
       adjacencies[door].push(roomKey);
     }
   }
-  console.log("ROOM GRAPH", adjacencies);
   return adjacencies;
 }
 
@@ -496,6 +494,56 @@ function rebuildWorld(world) {
   return newWorld;
 }
 
+/// App state
+
+let appState = {
+  pegs: [],
+  walls: [],
+  rooms: [],
+  doors: [], // list of wall keys that have doors
+  activeWallAnchor: null,
+  latestPeg: null,
+  latestWall: null,
+  mode: "delete", // "delete" or "door" or "sim" atm
+  guys: [], // has pos, task, taskQueue
+  roomData: {}, // keyed by roomKey, must gc when rooms change
+};
+
+// init pegs
+const CELL_SIZE = 10;
+const GRID_SIZE = 20;
+const MAP_SIZE = GRID_SIZE * CELL_SIZE;
+for (let x = 0; x < GRID_SIZE; x++) {
+  for (let y = 0; y < GRID_SIZE; y++) {
+    appState.pegs.push({
+      x: (x * CELL_SIZE) + (CELL_SIZE / 2),
+      y: (y * CELL_SIZE) + (CELL_SIZE / 2),
+    });
+  }
+}
+
+/// Praxish
+
+let appPraxishState = null;
+function initPraxishState() {
+  appPraxishState = Praxish.createPraxishState();
+  // initial character setup – `char.Name` for each
+  for (const guy of appState.guys) {
+    Praxish.performOutcome(appPraxishState, `insert char.${guy.name}`);
+  }
+  // initial world setup – room tags and adjacencies
+  for (const sentence of exportRoomData(appState)) {
+    Praxish.performOutcome(appPraxishState, `insert ${sentence}`);
+  }
+  // define practices from domain
+  Praxish.definePractice(appPraxishState, Domain.greetPractice);
+  // spawn initial practice instances, initialize other domain-specified state
+  for (const sentence of Domain.initSentences) {
+    Praxish.performOutcome(appPraxishState, `insert ${sentence}`);
+  }
+  return appPraxishState;
+}
+
 // Given a `world` datastructure with a `roomGraph` and optional `roomData`,
 // build and return a list of Praxish database facts that expose information
 // about room tags and room connectivity to social actors.
@@ -530,32 +578,78 @@ function exportRoomData(world) {
   return sentences;
 }
 
-/// App state
-
-let appState = {
-  pegs: [],
-  walls: [],
-  rooms: [],
-  doors: [], // list of wall keys that have doors
-  activeWallAnchor: null,
-  latestPeg: null,
-  latestWall: null,
-  mode: "delete", // "delete" or "door" or "sim" atm
-  guys: [], // has pos, task, taskQueue
-  roomData: {}, // keyed by roomKey, must gc when rooms change
-};
-
-// init pegs
-const CELL_SIZE = 10;
-const GRID_SIZE = 20;
-const MAP_SIZE = GRID_SIZE * CELL_SIZE;
-for (let x = 0; x < GRID_SIZE; x++) {
-  for (let y = 0; y < GRID_SIZE; y++) {
-    appState.pegs.push({
-      x: (x * CELL_SIZE) + (CELL_SIZE / 2),
-      y: (y * CELL_SIZE) + (CELL_SIZE / 2),
-    });
+function takePraxishTurn(guy) {
+  // i guess we're assuming the guy is untasked at this point?
+  const possibleActions = Swaygent.scoreActions(appPraxishState, guy) || [];
+  if (possibleActions.length === 0) {
+    console.warn("No actions to perform!", guy);
+    return false;
   }
+  const impossibleActions = possibleActions.impossibleActions;
+  console.log("Considering actions", {guy, possibleActions, impossibleActions});
+  const action = possibleActions[0]; // TODO better selection logic
+  console.log("Performing action :: ", action);
+  Praxish.performAction(appPraxishState, action);
+  // query for and execute any newly added DM instructions
+  const dmInstructions = Praxish.query(appPraxishState.db, [
+    "dm.Char.InstructionType.Argument",
+  ], {});
+  for (const instruction of dmInstructions) {
+    console.log("Executing DM instruction :: ", instruction);
+    const guy = appState.guys.find(guy => guy.name === instruction.Char);
+    if (instruction.InstructionType === "planPath") {
+      const roomName = instruction.Argument;
+      // find room with given room name if any
+      const roomKey = Object.entries(appState.roomData).find((roomKey, data) => {
+        return data.tags.startsWith(roomName) ? roomKey : null;
+      }) || roomName;
+      // pick random pathing point inside room
+      const navmesh = appState.navmeshes[roomKey];
+      const pathingPoints = Object.keys(navmesh);
+      if (pathingPoints.length === 0) {
+        console.warn("No pathing points in target room!", guy, roomName, roomKey, navmesh);
+        return false; // TODO roll back action since it can't be completed?
+      }
+      const targetPos = unpackPoint(randNth(pathingPoints));
+      // generate task queue from guy pos to there
+      const fullPath = planPath(guy.pos, targetPos);
+      if (!fullPath) {
+        console.warn("No path to target room!", guy, roomName, roomKey, navmesh);
+        return false; // TODO roll back action since it can't be completed?
+      }
+      guy.taskQueue = fullPath.map(point => ({type: "move", to: point}));
+      // TODO explicitly mark char busy in Praxish DB?
+      // (will the next simulation frame take care of this well enough?)
+    }
+    else if (instruction.InstructionType === "markBusy") {
+      // parse out how long to mark guy as busy
+      const duration = Number(instruction.Argument);
+      if (!Number.isFinite(duration)) {
+        console.warn("Invalid duration!", instruction, duration);
+        return false; // TODO roll back action since it can't be completed?
+      }
+      // query for (optional) busy reason – could be used to play different
+      // animations and such depending on why the guy's busy
+      const busyReasonResults = Praxish.query(appPraxishState.db, [
+        "dm.Char.InstructionType.Argument.Reason",
+      ], {...instruction});
+      const busyReason = busyReasonResults[0]?.Reason;
+      // assign busy-waiting task of given duration
+      const task = {type: "busy", ticksToWait: duration};
+      if (busyReason) {
+        task.reason = busyReason;
+      }
+      guy.taskQueue = [task];
+      // TODO explicitly mark char busy in Praxish DB?
+      // (will the next simulation frame take care of this well enough?)
+    }
+    else {
+      console.warn("invalid DM instruction", instruction);
+    }
+  }
+  // clear DM instructions
+  Praxish.performOutcome(appPraxishState, "delete dm");
+  return true;
 }
 
 /// Simulation
@@ -718,13 +812,24 @@ function assignRandomGoal(guy) {
   return path?.map(point => ({type: "move", to: point})) || FALLBACK_GOAL;
 }
 
+// Generate a random character name.
+function generateCharName() {
+  const cons = "bcdfghjklmnpqrstvwxyz".split("");
+  const vows = "aeiou".split("");
+  return [
+    randNth(cons), randNth(vows),
+    randNth(cons), randNth(vows),
+    randNth(cons), randNth(vows),
+  ].join("");
+}
+
 // Spawn a new guy inside the given `room`, assign them a random goal,
 // and return them so that they can be added to `appState.guys`.
 function spawnGuy(room) {
   const pathingPoints = pathingPointsInside(room);
   if (pathingPoints.length === 0) return;
   const initPos = randNth(pathingPoints);
-  const guy = {type: "guy", pos: initPos};
+  const guy = {type: "guy", pos: initPos, name: generateCharName()};
   guy.taskQueue = assignRandomGoal(guy);
   return guy;
 }
@@ -735,7 +840,7 @@ function hasCompletedCurrentTask(guy) {
   if (task.type === "move") {
     return task.amount >= 1;
   }
-  else if (task.type === "wait") {
+  else if (task.type === "wait" || task.type === "busy") {
     return task.ticksTaken >= task.ticksToWait;
   }
   else {
@@ -752,7 +857,7 @@ function keepDoingCurrentTask(guy) {
     guy.pos = pointAlong(task.from, task.to, task.amount);
     task.amount += task.amountPerFrame;
   }
-  else if (task.type === "wait") {
+  else if (task.type === "wait" || task.type === "busy") {
     task.ticksTaken += 1;
   }
   else {
@@ -770,13 +875,17 @@ function startDoingNextTask(guy) {
     task.amount = 0;
     task.amountPerFrame = MOVE_SPEED / distance(task.from, task.to);
   }
-  else if (task.type === "wait") {
+  else if (task.type === "wait" || task.type === "busy") {
     task.ticksTaken = 0;
   }
   else {
     console.warn("invalid next task type", guy, task);
   }
   guy.task = task;
+  // Praxish update: flag as busy, except if task is waiting
+  if (task.type !== "wait") {
+    Praxish.performOutcome(appPraxishState, `insert char.${guy.name}.status!busy`);
+  }
 }
 
 function tickSimulation() {
@@ -786,6 +895,20 @@ function tickSimulation() {
       if (hasCompletedCurrentTask(guy)) {
         //console.log("completed task!", guy);
         delete guy.task;
+        // Praxish update: flag as no longer busy
+        Praxish.performOutcome(appPraxishState, `delete char.${guy.name}.status`);
+        // Praxish update: set current room
+        const packedGuyPos = guy.pos.join(",");
+        const room = appState.rooms.find(room => pointInsidePolygon(packedGuyPos, room));
+        if (room) {
+          const roomKey = room.join(";");
+          const roomName = appState.roomData[roomKey]?.tag?.trim().split(/s+/)[0] || roomKey;
+          Praxish.performOutcome(appPraxishState, `insert char.${guy.name}.at!${roomName}`);
+        }
+        else {
+          console.warn("Guy doesn't seem to be inside a room!", guy);
+          Praxish.performOutcome(appPraxishState, `insert char.${guy.name}.at!beyond`);
+        }
       }
       else {
         keepDoingCurrentTask(guy);
@@ -795,7 +918,10 @@ function tickSimulation() {
       startDoingNextTask(guy);
     }
     else {
-      guy.taskQueue = assignRandomGoal(guy);
+      const tookPraxishTurn = takePraxishTurn(guy);
+      if (!tookPraxishTurn) {
+        guy.taskQueue = assignRandomGoal(guy);
+      }
     }
   }
   // show task progress
@@ -814,6 +940,8 @@ function startSimulation() {
     if (!guy) continue;
     appState.guys.push(guy);
   }
+  // create a fresh Praxish state
+  initPraxishState();
   // start the sim loop
   requestAnimationFrame(tickSimulation);
 }
@@ -1106,7 +1234,9 @@ function WorldEditor(props) {
           task => task?.type === "move" && task.to
         ).filter(x => x);
         const fullPath = [guy.pos, ...plannedMoves];
-        const waitProgress = guy.task?.type === "wait" && (guy.task.ticksTaken / guy.task.ticksToWait);
+        const taskType = guy.task?.type;
+        const doingStationaryTask = taskType === "wait" || taskType === "busy";
+        const taskProgress = doingStationaryTask && (guy.task.ticksTaken / guy.task.ticksToWait);
         return e("g", {className: "guy-info"},
           fullPath.length > 0 && e("polyline", {
             className: "guy-path",
@@ -1117,8 +1247,8 @@ function WorldEditor(props) {
           e("circle", {
             className: "guy", cx: guy.pos[0], cy: guy.pos[1],
             fill: "magenta", r: 2,
-            stroke: "cyan",
-            strokeWidth: (waitProgress && Math.sin(waitProgress * Math.PI)) || 0,
+            stroke: {wait: "cyan", busy: "yellow"}[taskType] || "none",
+            strokeWidth: (taskProgress && Math.sin(taskProgress * Math.PI)) || 0,
           }),
         );
       }),
