@@ -536,7 +536,9 @@ function initPraxishState() {
     Praxish.performOutcome(appPraxishState, `insert ${sentence}`);
   }
   // define practices from domain
-  Praxish.definePractice(appPraxishState, Domain.greetPractice);
+  for (const practiceDef of Domain.practices) {
+    Praxish.definePractice(appPraxishState, practiceDef);
+  }
   // spawn initial practice instances, initialize other domain-specified state
   for (const sentence of Domain.initSentences) {
     Praxish.performOutcome(appPraxishState, `insert ${sentence}`);
@@ -918,9 +920,20 @@ function tickSimulation() {
       startDoingNextTask(guy);
     }
     else {
-      const tookPraxishTurn = takePraxishTurn(guy);
-      if (!tookPraxishTurn) {
+      // find a new action to perform
+      if (Math.random() < 0.2) {
+        // randomly break out of social interaction sometimes
+        // TODO atm this will skip out on required actions too; maybe we should
+        // only try this if no actions are required
         guy.taskQueue = assignRandomGoal(guy);
+      }
+      else {
+        // if not breaking out, try to take a Praxish turn
+        const tookPraxishTurn = takePraxishTurn(guy);
+        if (!tookPraxishTurn) {
+          // if it failed, find something else to do
+          guy.taskQueue = assignRandomGoal(guy);
+        }
       }
     }
   }
@@ -1238,7 +1251,10 @@ function WorldEditor(props) {
         const fullPath = [guy.pos, ...plannedMoves];
         const taskType = guy.task?.type;
         const doingStationaryTask = taskType === "wait" || taskType === "busy";
-        const taskIcon = {greeting: "👋"}[guy.task?.reason];
+        const taskIcon = {
+          greeting: "👋", speaking: "💬", flirting: "😘", kissing: "💋",
+          animals: "🐻", nature: "🌲", travel: "🧳", food: "🍔",
+        }[guy.task?.reason];
         const taskProgress = doingStationaryTask && (guy.task.ticksTaken / guy.task.ticksToWait);
         return e("g", {className: "guy-info"},
           fullPath.length > 0 && e("polyline", {
