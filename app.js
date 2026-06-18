@@ -567,7 +567,7 @@ function exportRoomData(world) {
   for (const room of world.rooms) {
     const roomKey = room.join(";");
     const roomName = roomNames[roomKey];
-    const doors = world.roomGraph[roomKey];
+    const doors = world.roomGraph[roomKey] || [];
     const connectedRoomKeys = mapcat(
       doors, door => world.roomGraph[door] || []
     ).filter(rk => rk !== roomKey);
