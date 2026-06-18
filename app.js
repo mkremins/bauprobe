@@ -590,7 +590,7 @@ function selectNPCAction(actions) {
   const positiveScoreActions = takeWhile(act => act.score > 0, topPriorityActions);
   if (positiveScoreActions.length > 0) {
     // Top-k pass: restrict to a few of the highest-scoring actions.
-    const k = 3; // Use `topPriorityActions.length` if you don't want a top-k cutoff
+    const k = 5; // Use `topPriorityActions.length` if you don't want a top-k cutoff
     const topKActions = topPriorityActions.slice(0, k);
     // Weighted random pass: select an action using weighted random choice.
     // Weights are given by the top k actions' (uniformly positive) scores,
@@ -647,7 +647,12 @@ function takePraxishTurn(guy) {
         console.warn("No path to target room!", guy, roomName, roomKey, navmesh);
         return false; // TODO roll back action since it can't be completed?
       }
-      guy.taskQueue = fullPath.map(point => ({type: "move", to: point}));
+      guy.taskQueue = [
+        // first traverse the full path
+        ...fullPath.map(point => ({type: "move", to: point})),
+        // then wait for a bit to allow social interaction
+        {type: "wait", ticksToWait: 100},
+      ];
       // TODO explicitly mark char busy in Praxish DB?
       // (will the next simulation frame take care of this well enough?)
     }
@@ -827,19 +832,9 @@ function planPath(initPos, targetPos) {
 }
 
 // Assemble and return a fresh new task queue for the given `guy`.
-// At the moment this will task them either with moving to a random
-// pathing point in the world or waiting for a fixed amount of time.
+// At the moment this just assigns them to wait for a fixed amount of time.
 function assignRandomGoal(guy) {
-  const FALLBACK_GOAL = [{type: "wait", ticksToWait: 100}];
-  if (Math.random() < 0.5) return FALLBACK_GOAL; // randomly wait sometimes
-  const possibleTargets = mapcat(appState.rooms, room => pathingPointsInside(room));
-  if (possibleTargets.length === 0) {
-    // no viable target anywhere, bail out early
-    return FALLBACK_GOAL;
-  }
-  const targetPos = randNth(possibleTargets);
-  const path = planPath(guy.pos, targetPos);
-  return path?.map(point => ({type: "move", to: point})) || FALLBACK_GOAL;
+  return [{type: "wait", ticksToWait: 100}];
 }
 
 // Generate a random character name.
@@ -949,19 +944,10 @@ function tickSimulation() {
     }
     else {
       // find a new action to perform
-      if (Math.random() < 0.2) {
-        // randomly break out of social interaction sometimes
-        // TODO atm this will skip out on required actions too; maybe we should
-        // only try this if no actions are required
+      const tookPraxishTurn = takePraxishTurn(guy);
+      if (!tookPraxishTurn) {
+        // if it failed, find something else to do
         guy.taskQueue = assignRandomGoal(guy);
-      }
-      else {
-        // if not breaking out, try to take a Praxish turn
-        const tookPraxishTurn = takePraxishTurn(guy);
-        if (!tookPraxishTurn) {
-          // if it failed, find something else to do
-          guy.taskQueue = assignRandomGoal(guy);
-        }
       }
     }
   }

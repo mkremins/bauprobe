@@ -1,6 +1,40 @@
 const Domain = {practices: []};
 
 Domain.practices.push({
+  id: "wander",
+  name: "People can wander from room to room",
+  roles: ["World"],
+  actions: [{
+    name: "[Actor]: Wander to [Room]",
+    conditions: [
+      "char.Actor.at.OldRoom",
+      // uses adjacency data injected by the DM
+      "room.OldRoom.connected.Room",
+    ],
+    outcomes: [
+      "insert dm.Actor.planPath.Room",
+    ],
+    influences: [{
+      name: "It's crowded in [OldRoom]",
+      conditions: [
+        "char.Other1.at.OldRoom", "char.Other2.at.OldRoom", "char.Other3.at.OldRoom",
+        "neq Actor Other1", "neq Actor Other2", "neq Actor Other3",
+        "neq Other1 Other2", "neq Other1 Other3",
+        "neq Other2 Other3",
+      ],
+      score: 2,
+    },
+    {
+      name: "[Actor] thinks [OldRoom] might be off limits",
+      conditions: [
+        "room.OldRoom.tag.secluded",
+      ],
+      score: 1,
+    }],
+  }]
+});
+
+Domain.practices.push({
   id: "greet",
   name: "People can greet one another",
   roles: ["World"],
@@ -327,6 +361,7 @@ Domain.practices.push({
 
 Domain.initSentences = [
   // initial practice instances
+  "practice.wander.world",
   "practice.greet.world",
   "practice.fsf.world",
   // conversation topics
