@@ -1039,6 +1039,7 @@ function importWorld() {
   uploadFile(contents => {
     const saveState = JSON.parse(contents);
     appState = {...appState, ...rebuildWorld(saveState)};
+    renderUI();
   }, {fileType: "json"});
 }
 
@@ -1101,7 +1102,6 @@ function WorldEditor(props) {
       e("button", {
         onClick: ev => {
           importWorld();
-          renderUI();
         }
       }, "import"),
       e("button", {
