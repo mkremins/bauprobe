@@ -14,7 +14,21 @@
 	.editor-toolbar > * { margin-right: 1ch; }
 	button { all: unset; background: #ccc; cursor: pointer; padding: 0.5ch; }
 	button.active { background: forestgreen; color: white; }
-	.room-inspector { width: 50%; padding: 1ch; }
+	/* char inspector */
+	.char-inspector { width: 25%; padding: 1ch; }
+	.char-data {
+		background: #eee;
+		margin-bottom: 0.5rem;
+		padding: 0.5ch;
+		border-radius: 0.5ch;
+		overflow-x: clip;
+		font-size: 0.8rem;
+	}
+	.char-data h3 { display: inline-block; margin-right: 1ch; }
+	.char-data.selected { background: orange; }
+	.char-data .queue-line:before { content: "next: "; }
+	/* room inspector */
+	.room-inspector { width: 25%; padding: 1ch; }
 	.room-data { margin-bottom: 0.5rem; padding: 0.5ch; border-radius: 0.5ch; }
 	.room-data h3 { display: inline-block; margin-right: 1ch; }
 	.room-data input { all: unset; width: 80%; color: #555; }

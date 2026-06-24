@@ -1057,9 +1057,42 @@ function renderUI() {
 
 function App(props) {
   return [
+    e(CharInspector, props),
     e(WorldEditor, props),
     e(RoomInspector, props),
   ];
+}
+
+function CharInspector(props) {
+  return e("div", {className: "char-inspector"},
+    props.guys.map(char => {
+      // render current task if any
+      let taskLine = "idle";
+      if (char.task?.type === "busy") {
+        taskLine = `busy for ${char.task.ticksToWait} with ${char.task.reason}`;
+      }
+      else if (char.task?.type === "move") {
+        taskLine = "moving";
+      }
+      // render queued tasks if any
+      let queueLine = "idle";
+      if (char.taskQueue?.length > 0) {
+        queueLine = char.taskQueue.map(task => task.type).join(", ");
+      }
+      return e("div", {
+          className: `char-data${props.selectedChar === char.name ? " selected" : ""}`,
+          key: char.name,
+          onClick: () => {
+            appState.selectedChar = char.name;
+            renderUI();
+          },
+        },
+        e("h3", {}, char.name),
+        e("div", {className: "task-line"}, taskLine),
+        e("div", {className: "queue-line"}, queueLine),
+      );
+    }),
+  );
 }
 
 function RoomInspector(props) {
@@ -1259,6 +1292,7 @@ function WorldEditor(props) {
       */
       // draw guys
       props.mode === "sim" && props.guys.map(guy => {
+        const isSelected = guy.name === props.selectedChar;
         const plannedMoves = [guy.task, ...guy.taskQueue].map(
           task => task?.type === "move" && task.to
         ).filter(x => x);
@@ -1280,14 +1314,19 @@ function WorldEditor(props) {
           }),
           e("circle", {
             className: "guy", cx: guy.pos[0], cy: guy.pos[1],
-            fill: "magenta", r: 2,
+            fill: isSelected ? "orange" : "magenta", r: 2,
             stroke: {wait: "cyan", busy: "yellow"}[taskType] || "none",
             strokeWidth: (taskProgress && Math.sin(taskProgress * Math.PI)) || 0,
+            onClick: () => {
+              appState.selectedChar = guy.name;
+              renderUI();
+            },
           }),
           taskIcon && e("text", {
             x: guy.pos[0], y: guy.pos[1],
             textAnchor: "middle", dominantBaseline: "middle",
             fontSize: 8 + (Math.sin(taskProgress * Math.PI) * 2),
+            style: {pointerEvents: "none"}, // pass thru to underlying guy
           }, taskIcon),
         );
       }),
