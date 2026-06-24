@@ -862,13 +862,42 @@ function generateCharName() {
   ].join("");
 }
 
+// Generate a random character face.
+function generateCharFace() {
+  const zwj = "‍";
+  const genderBases = ["🧑", "👨", "👩"];
+  const genderMods = ["", "♂️", "♀️"];
+  const skinTones = ["", "🏻", "🏼", "🏽", "🏾", "🏿"];
+  const hairTypes = ["unset", "beard", "blond", "red", "white", "curly", "bald"];
+  const hairType = randNth(hairTypes);
+  if (["unset", "beard", "blond"].includes(hairType)) {
+    // hair type set by base, skin tone set by modifier...
+    // gender set by base IFF binary gender with unset hair type, otherwise by modifier
+    let hairBase = {unset: "🧑", beard: "🧔", blond: "👱"}[hairType];
+    let genderMod = randNth(genderMods);
+    if (hairType === "unset" && genderMod.length > 0) {
+      hairBase = {"♂️": "👨", "♀️": "👩"}[genderMod];
+      genderMod = "";
+    }
+    return [hairBase, randNth(skinTones), genderMod.length > 0 ? zwj : "", genderMod].join("");
+  }
+  else {
+    // gender set by base, skin tone + hair type set by modifier
+    const hairMod = {red: "🦰", white: "🦳", curly: "🦱", bald: "🦲"}[hairType];
+    return [randNth(genderBases), randNth(skinTones), zwj, hairMod].join("");
+  }
+}
+
 // Spawn a new guy inside the given `room`, assign them a random goal,
 // and return them so that they can be added to `appState.guys`.
 function spawnGuy(room) {
   const pathingPoints = pathingPointsInside(room);
   if (pathingPoints.length === 0) return;
   const initPos = randNth(pathingPoints);
-  const guy = {type: "guy", pos: initPos, name: generateCharName()};
+  const guy = {
+    type: "guy", pos: initPos,
+    name: generateCharName(), face: generateCharFace()
+  };
   guy.taskQueue = assignRandomGoal(guy);
   return guy;
 }
@@ -1327,20 +1356,20 @@ function WorldEditor(props) {
             stroke: "rgba(255,0,255,0.5)", fill: "none",
             strokeWidth: 1, strokeDasharray: 1,
           }),
-          e("circle", {
-            className: "guy", cx: guy.pos[0], cy: guy.pos[1],
-            fill: isSelected ? "orange" : "magenta", r: 2,
-            stroke: {wait: "cyan", busy: "yellow"}[taskType] || "none",
-            strokeWidth: (taskProgress && Math.sin(taskProgress * Math.PI)) || 0,
+          e("text", {
+            x: guy.pos[0], y: guy.pos[1],
+            textAnchor: "middle", dominantBaseline: "middle",
+            style: {textShadow: isSelected ? "orange 0 0 8px" : "none"},
+            fontSize: 8,
             onClick: () => {
               appState.selectedChar = guy.name;
               renderUI();
             },
-          }),
+          }, guy.face),
           taskIcon && e("text", {
-            x: guy.pos[0], y: guy.pos[1],
+            x: guy.pos[0] + (CELL_SIZE * 0.4), y: guy.pos[1] - (CELL_SIZE * 0.4),
             textAnchor: "middle", dominantBaseline: "middle",
-            fontSize: 8 + (Math.sin(taskProgress * Math.PI) * 2),
+            fontSize: 4 + (Math.sin(taskProgress * Math.PI) * 2),
             style: {pointerEvents: "none"}, // pass thru to underlying guy
           }, taskIcon),
         );
