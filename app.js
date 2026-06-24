@@ -1109,19 +1109,7 @@ function App(props) {
 function CharInspector(props) {
   return e("div", {className: "char-inspector"},
     props.guys.map(char => {
-      // render current task if any
-      let taskLine = "idle";
-      if (char.task?.type === "busy") {
-        taskLine = `busy for ${char.task.ticksToWait} with ${char.task.reason}`;
-      }
-      else if (char.task?.type === "move") {
-        taskLine = "moving";
-      }
-      // render queued tasks if any
-      let queueLine = "idle";
-      if (char.taskQueue?.length > 0) {
-        queueLine = char.taskQueue.map(task => task.type).join(", ");
-      }
+      const cleanAction = char.lastAction?.name.replace(`${char.name}:`, "").trim();
       return e("div", {
           className: `char-data${props.selectedChar === char.name ? " selected" : ""}`,
           key: char.name,
@@ -1130,10 +1118,13 @@ function CharInspector(props) {
             renderUI();
           },
         },
-        e("h3", {}, char.name),
-        e("div", {className: "action-line"}, char.lastAction?.name),
-        e("div", {className: "task-line"}, taskLine),
-        e("div", {className: "queue-line"}, queueLine),
+        e("h3", {}, `${char.face} ${char.name}`),
+        e("div", {className: "action-line"}, cleanAction),
+        e("ul", {className: "sways-list"}, char.lastAction?.sways.map(sway => {
+          return e("li", {},
+            `${sway.type}: ${sway.name} (${sway.score || 0}, ${sway.rule.priority || "normal"})`
+          );
+        })),
       );
     }),
   );
