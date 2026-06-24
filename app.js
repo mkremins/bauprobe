@@ -633,14 +633,27 @@ function takePraxishTurn(guy) {
       const roomKey = Object.entries(appState.roomData).find(([roomKey, data]) => {
         return data.tags?.startsWith(roomName) ? roomKey : null;
       })?.[0] || roomName;
-      // pick random pathing point inside room
+      // pick random pathing point inside room, ideally unoccupied if possible
       const navmesh = appState.navmeshes[roomKey];
       const pathingPoints = Object.keys(navmesh).filter(p => p.split(";").length === 1);
       if (pathingPoints.length === 0) {
         console.warn("No pathing points in target room!", guy, roomName, roomKey, navmesh);
         return false; // TODO roll back action since it can't be completed?
       }
-      const targetPos = unpackPoint(randNth(pathingPoints));
+      const otherGuys = appState.guys.filter(guy => guy.name !== instruction.Char);
+      const expectedGuyPositions = otherGuys.map(guy => {
+        // return final planned position if moving, current position otherwise
+        const fullQueue = [guy.task, ...(guy.taskQueue || [])].filter(x => x);
+        const moveQueue = fullQueue.filter(task => task.type === "move");
+        return moveQueue.length > 0 ? moveQueue.at(-1).to : guy.pos;
+      });
+      const openPoints = pathingPoints.filter(point => {
+        const unpacked = unpackPoint(point);
+        const isFarEnough = point => distance(point, unpacked) >= CELL_SIZE;
+        return expectedGuyPositions.every(isFarEnough);
+      });
+      const pointsToSample = openPoints.length > 0 ? openPoints : pathingPoints;
+      const targetPos = unpackPoint(randNth(pointsToSample));
       // generate task queue from guy pos to there
       const fullPath = planPath(guy.pos, targetPos);
       if (!fullPath) {
