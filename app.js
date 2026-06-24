@@ -620,6 +620,7 @@ function takePraxishTurn(guy) {
   const action = selectNPCAction(possibleActions);
   console.log("Performing action :: ", action);
   Praxish.performAction(appPraxishState, action);
+  guy.lastAction = action;
   // query for and execute any newly added DM instructions
   const dmInstructions = Praxish.query(appPraxishState.db, [
     "dm.Char.InstructionType.Argument",
@@ -1101,6 +1102,7 @@ function CharInspector(props) {
           },
         },
         e("h3", {}, char.name),
+        e("div", {className: "action-line"}, char.lastAction?.name),
         e("div", {className: "task-line"}, taskLine),
         e("div", {className: "queue-line"}, queueLine),
       );
