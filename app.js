@@ -900,7 +900,7 @@ function spawnGuy(room) {
   if (pathingPoints.length === 0) return;
   const initPos = randNth(pathingPoints);
   const guy = {
-    type: "guy", pos: initPos,
+    type: "guy", pos: initPos, tags: "",
     name: generateCharName(), face: generateCharFace()
   };
   guy.taskQueue = assignRandomGoal(guy);
@@ -1113,7 +1113,7 @@ function App(props) {
 
 function CharInspector(props) {
   return e("div", {className: "char-inspector"},
-    props.guys.map(char => {
+    props.guys.map((char, charIdx) => {
       const cleanAction = char.lastAction?.name.replace(`${char.name}:`, "").trim();
       return e("div", {
           className: `char-data${props.selectedChar === char.name ? " selected" : ""}`,
@@ -1124,6 +1124,15 @@ function CharInspector(props) {
           },
         },
         e("h3", {}, `${char.face} ${char.name}`),
+        e("input", {
+          type: "text",
+          value: char.tags,
+          onChange: ev => {
+            appState.guys[charIdx].tags = ev.target.value;
+            renderUI();
+          },
+          placeholder: "tags here…",
+        }),
         e("div", {className: "action-line"}, cleanAction),
         e("ul", {className: "sways-list"}, char.lastAction?.sways.map(sway => {
           return e("li", {},
