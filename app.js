@@ -26,6 +26,19 @@ function distinctBy(f, xs) {
   return ys;
 }
 
+// Return a shuffled copy of a list, leaving the original list unmodified.
+function shuffle(items) {
+  const newItems = [];
+  for (let i = 0; i < items.length; i++) {
+    newItems.push(items[i]);
+  }
+  for (let i = newItems.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newItems[i], newItems[j]] = [newItems[j], newItems[i]];
+  }
+  return newItems;
+}
+
 function bfs(graph, init, target) {
   const queue = [init];
   const parent = {};
@@ -896,16 +909,22 @@ function generateCharFace() {
   }
 }
 
+// Generate a whole random character.
+function generateChar() {
+  return {
+    type: "guy", tags: "",
+    name: generateCharName(), face: generateCharFace(),
+  };
+}
+
 // Spawn a new guy inside the given `room`, assign them a random goal,
 // and return them so that they can be added to `appState.guys`.
 function spawnGuy(room) {
   const pathingPoints = pathingPointsInside(room);
   if (pathingPoints.length === 0) return;
   const initPos = randNth(pathingPoints);
-  const guy = {
-    type: "guy", pos: initPos, tags: "",
-    name: generateCharName(), face: generateCharFace()
-  };
+  const guy = generateChar();
+  guy.pos = initPos;
   guy.taskQueue = assignRandomGoal(guy);
   return guy;
 }
@@ -1010,13 +1029,25 @@ function tickSimulation() {
 }
 
 function startSimulation() {
-  // clear the preexisting guys
-  appState.guys = [];
-  // create a guy for each room
-  for (const room of appState.rooms) {
-    const guy = spawnGuy(room);
-    if (!guy) continue;
-    appState.guys.push(guy);
+  if (appState.guys.length > 0) {
+    // preexisting cast; refresh and respawn them
+    const allPathingPoints = mapcat(appState.rooms, pathingPointsInside);
+    const pointsToUse = shuffle(allPathingPoints);
+    for (let i = 0; i < appState.guys.length; i++) {
+      const guy = appState.guys[i];
+      guy.pos = pointsToUse[i] || [CELL_SIZE, CELL_SIZE];
+      delete guy.task; // clear any lingering task from previous sim run
+      guy.taskQueue = assignRandomGoal(guy);
+    }
+  }
+  else {
+    // no preexisting cast; generate a fresh one
+    appState.guys = [];
+    for (const room of appState.rooms) {
+      const guy = spawnGuy(room);
+      if (!guy) continue;
+      appState.guys.push(guy);
+    }
   }
   // create a fresh Praxish state
   initPraxishState();
@@ -1136,6 +1167,14 @@ function CharInspector(props) {
           },
           placeholder: "tags here…",
         }),
+        e("button", {
+          className: "delete-char",
+          disabled: appState.mode === "sim",
+          onClick: () => {
+            appState.guys = appState.guys.filter(c => c.name !== char.name);
+            renderUI();
+          },
+        }, "×"),
         e("div", {className: "action-line"}, cleanAction),
         e("ul", {className: "sways-list"}, char.lastAction?.sways.map(sway => {
           return e("li", {},
@@ -1144,6 +1183,14 @@ function CharInspector(props) {
         })),
       );
     }),
+    e("button", {
+      className: "add-char",
+      disabled: appState.mode === "sim",
+      onClick: () => {
+        appState.guys.push(generateChar());
+        renderUI();
+      },
+    }, "+ character"),
   );
 }
 

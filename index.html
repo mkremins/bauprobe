@@ -14,6 +14,7 @@
 	.editor-toolbar > * { margin-right: 1ch; }
 	button { all: unset; background: #ccc; cursor: pointer; padding: 0.5ch; }
 	button.active { background: forestgreen; color: white; }
+	button:disabled { cursor: not-allowed; }
 	/* char inspector */
 	.char-inspector { width: 25%; padding: 1ch; }
 	.char-data {
@@ -23,10 +24,12 @@
 		border-radius: 0.5ch;
 		overflow-x: clip;
 		font-size: 0.8rem;
+		position: relative;
 	}
 	.char-data h3 { display: inline-block; margin-right: 1ch; }
 	.char-data input { all: unset; width: 60%; color: #555; }
 	.char-data input::placeholder { font-style: italic; color: #999; }
+	.char-data .delete-char { position: absolute; top: 0; right: 0; }
 	.char-data.selected { background: orange; }
 	.char-data .queue-line:before { content: "next: "; }
 	.sways-list { font-size: 0.6rem; padding-left: 0.6rem; }
