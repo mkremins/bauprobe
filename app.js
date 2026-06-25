@@ -642,15 +642,20 @@ function takePraxishTurn(guy) {
         return false; // TODO roll back action since it can't be completed?
       }
       const otherGuys = appState.guys.filter(guy => guy.name !== instruction.Char);
-      const expectedGuyPositions = otherGuys.map(guy => {
-        // return final planned position if moving, current position otherwise
-        const fullQueue = [guy.task, ...(guy.taskQueue || [])].filter(x => x);
-        const moveQueue = fullQueue.filter(task => task.type === "move");
-        return moveQueue.length > 0 ? moveQueue.at(-1).to : guy.pos;
+      const expectedGuyPositions = mapcat(otherGuys, guy => {
+        // return current position if not actively moving...
+        const isMoving = guy.task?.type === "move";
+        const currentPos = !isMoving && guy.pos;
+        // ...and final planned position if any
+        const plannedMoves = [guy.task, ...guy.taskQueue].map(
+          task => task?.type === "move" && task.to
+        ).filter(x => x);
+        const plannedPos = plannedMoves.length > 0 && plannedMoves.at(-1);
+        return [currentPos, plannedPos].filter(x => x);
       });
       const openPoints = pathingPoints.filter(point => {
         const unpacked = unpackPoint(point);
-        const isFarEnough = point => distance(point, unpacked) >= CELL_SIZE;
+        const isFarEnough = point => distance(point, unpacked) >= (CELL_SIZE / 2);
         return expectedGuyPositions.every(isFarEnough);
       });
       const pointsToSample = openPoints.length > 0 ? openPoints : pathingPoints;
