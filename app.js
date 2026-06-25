@@ -527,9 +527,12 @@ for (let x = 0; x < GRID_SIZE; x++) {
 let appPraxishState = null;
 function initPraxishState() {
   appPraxishState = Praxish.createPraxishState();
-  // initial character setup – `char.Name` for each
+  // initial character setup – `char.Name` for each, plus tags
   for (const guy of appState.guys) {
     Praxish.performOutcome(appPraxishState, `insert char.${guy.name}`);
+    for (const tag of guy.tags?.trim().split(/\s+/).filter(s => s.length > 0)) {
+      Praxish.performOutcome(appPraxishState, `insert char.${guy.name}.tag.${tag}`);
+    }
   }
   // initial world setup – room tags and adjacencies
   for (const sentence of exportRoomData(appState)) {
