@@ -422,7 +422,6 @@ Domain.practices.push({
       outcomes: [
         "delete practice.tendBar.Room.Bartender.order.Customer",
         "insert practice.tendBar.Room.Bartender.ordersFulfilled!NewCount",
-        "insert practice.drink.Customer", // TODO force spawn detection – resets drunkenness tho :(
         "insert practice.drink.Customer.holdingDrink!Drink.amount.5",
         "insert dm.Actor.markBusy.100.Drink",
       ],
