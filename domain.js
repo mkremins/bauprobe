@@ -109,6 +109,24 @@ Domain.practices.push({
         "insert dm.Other.markBusy.100.looking",
       ],
     },
+    {
+      name: "[Actor]: Start tending bar in [Room]",
+      conditions: [
+        "char.Actor.at.Room",
+        "char.Actor.tag.host",
+        "room.Room.tag.bar",
+        "not practice.tendBar.Room",
+      ],
+      outcomes: [
+        "insert practice.tendBar.Room.Actor",
+        "insert dm.Actor.markBusy.100.hosting",
+      ],
+      influences: [{
+        name: "Someone's gotta man the bar",
+        conditions: [],
+        score: 5,
+      }]
+    },
   ]
 });
 
@@ -359,6 +377,184 @@ Domain.practices.push({
   ]
 });
 
+Domain.practices.push({
+  id: "tendBar",
+  name: "[Bartender] is tending bar in [Room]",
+  roles: ["Room", "Bartender"],
+  init: [
+    "insert practice.tendBar.Room.Bartender.ordersFulfilled!0",
+  ],
+  actions: [
+    {
+      name: "[Actor]: Order a [Drink] from [Bartender]",
+      conditions: [
+        "neq Actor Bartender",
+        "char.Actor.at.Room",
+        "not practice.drink.Actor.holdingDrink",
+        "not practice.tendBar.Room.Bartender.order.Actor",
+        "drink.Drink",
+      ],
+      outcomes: [
+        "insert practice.tendBar.Room.Bartender.order.Actor!Drink",
+        "insert dm.Actor.markBusy.100.Drink",
+      ],
+      influences: [{
+        name: "[Actor] hasn't got a drink at the moment",
+        conditions: [],
+        score: 5,
+      },
+      // TODO people prefer to order drinks they like
+      // TODO people who are already drunk want to keep drinking?
+      // TODO people who abstain from alcohol don't order drinks
+      ],
+    },
+    {
+      name: "[Actor]: Fulfill [Customer]'s [Drink] order",
+      conditions: [
+        "eq Actor Bartender",
+        "char.Actor.at.Room",
+        "char.Customer.at.Room",
+        "practice.tendBar.Room.Bartender.order.Customer.Drink",
+        "not practice.drink.Customer.holdingDrink",
+        "practice.tendBar.Room.Bartender.ordersFulfilled.Count",
+        "calc NewCount add Count 1",
+      ],
+      outcomes: [
+        "delete practice.tendBar.Room.Bartender.order.Customer",
+        "insert practice.tendBar.Room.Bartender.ordersFulfilled!NewCount",
+        "insert practice.drink.Customer", // TODO force spawn detection – resets drunkenness tho :(
+        "insert practice.drink.Customer.holdingDrink!Drink.amount.5",
+        "insert dm.Actor.markBusy.100.Drink",
+      ],
+      influences: [{
+        name: "[Actor] ought to fulfill drink orders",
+        conditions: [],
+        priority: "required",
+      },
+      // TODO bartenders preferentially fulfill orders from those they like?
+      ],
+    },
+    {
+      // fallback action for an on-duty bartender who can't do anything else,
+      // so they aren't forced by circumstance to wander into the next room
+      // even though doing so is forbidden
+      name: "[Actor]: Clean glass",
+      conditions: ["eq Actor Bartender"],
+      outcomes: ["insert dm.Actor.markBusy.100.hosting"],
+    },
+    {
+      name: "[Actor]: Wrap up bartending shift",
+      conditions: [
+        "eq Actor Bartender",
+        "practice.tendBar.Room.Bartender.ordersFulfilled.Count",
+        "gt Count 5",
+      ],
+      outcomes: [
+        "delete practice.tendBar.Room",
+        "insert dm.Actor.markBusy.100.sighing",
+      ],
+      influences: [{
+        name: "[Actor] has fulfilled a lot of orders already",
+        conditions: [
+          "practice.tendBar.Room.Bartender.ordersFulfilled.Count",
+          "gt Count 10",
+          "calc Weight sub Count 10",
+        ],
+        score: "Weight",
+      }],
+    },
+  ],
+  volitions: [{
+    name: "[Bartender] can't leave [Room] while on duty",
+    conditions: [
+      "dm.Bartender.planPath.TargetRoom",
+      "neq TargetRoom Room",
+    ],
+    priority: "forbidden",
+  },
+  {
+    name: "[Customer] shouldn't leave [Room] while waiting for a drink",
+    conditions: [
+      "practice.tendBar.Room.Bartender.order.Customer",
+      "dm.Customer.planPath.TargetRoom",
+      "neq TargetRoom Room",
+    ],
+    score: -5
+  }]
+});
+
+Domain.practices.push({
+  id: "drink",
+  name: "[Drinker] is drinking",
+  roles: ["Drinker"],
+  init: [
+    "insert practice.drink.Drinker.drunkenness!0",
+  ],
+  actions: [
+    {
+      name: "[Actor]: Sip [Drink]",
+      conditions: [
+        "eq Actor Drinker",
+        "practice.drink.Actor.holdingDrink.Drink.amount.Amount",
+        "gt Amount 1",
+        "calc NewAmount sub Amount 1",
+        "practice.drink.Actor.drunkenness.Drunkenness",
+        "calc NewDrunkenness add Drunkenness 1",
+      ],
+      outcomes: [
+        "insert practice.drink.Actor.holdingDrink!Drink.amount.NewAmount",
+        "insert practice.drink.Actor.drunkenness!NewDrunkenness",
+        "insert dm.Actor.markBusy.100.Drink",
+      ],
+      influences: [{
+        name: "People like drinking",
+        conditions: [],
+        score: 1,
+      }],
+    },
+    {
+      name: "[Actor]: Finish [Drink]",
+      conditions: [
+        "eq Actor Drinker",
+        "practice.drink.Actor.holdingDrink.Drink.amount.Amount",
+        "eq Amount 1",
+        "practice.drink.Actor.drunkenness.Drunkenness",
+        "calc NewDrunkenness add Drunkenness 1",
+      ],
+      outcomes: [
+        "delete practice.drink.Actor.holdingDrink",
+        "insert practice.drink.Actor.drunkenness!NewDrunkenness",
+        "insert dm.Actor.markBusy.100.relaxing",
+      ],
+      influences: [{
+        name: "People like drinking",
+        conditions: [],
+        score: 1,
+      }],
+    },
+    {
+      name: "[Actor]: Chug [Drink]",
+      conditions: [
+        "eq Actor Drinker",
+        "practice.drink.Actor.holdingDrink.Drink.amount.Amount",
+        "gt Amount 1",
+        "practice.drink.Actor.drunkenness.Drunkenness",
+        "calc NewDrunkenness add Drunkenness Amount",
+      ],
+      outcomes: [
+        "delete practice.drink.Actor.holdingDrink",
+        "insert practice.drink.Actor.drunkenness!NewDrunkenness",
+        "insert dm.Actor.markBusy.100.drunk",
+      ],
+      influences: [{
+        name: "Rowdy people like to chug their drinks",
+        conditions: ["char.Actor.tag.rowdy"],
+        score: 1,
+      }],
+    },
+  ]
+});
+
 Domain.initSentences = [
   // initial practice instances
   "practice.wander.world",
@@ -371,4 +567,10 @@ Domain.initSentences = [
   "topic.travel.connected.nature",
   "topic.travel.connected.food",
   "topic.food.connected.travel",
+  // drinks
+  "drink.dryCocktail",
+  "drink.fruityCocktail",
+  "drink.whiskey",
+  "drink.wine",
+  "drink.beer",
 ];

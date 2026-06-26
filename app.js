@@ -1399,8 +1399,14 @@ function WorldEditor(props) {
         const taskType = guy.task?.type;
         const doingStationaryTask = taskType === "wait" || taskType === "busy";
         const taskIcon = {
-          greeting: "👋", speaking: "💬", flirting: "😘", looking: "👀",
-          smirking: "😏", rejecting: "🚫", shrugging: "💔", kissing: "💋",
+          // basic activities
+          greeting: "👋", speaking: "💬", sighing: "😮‍💨", relaxing: "😌",
+          // romance
+          flirting: "😘", looking: "👀", smirking: "😏", rejecting: "🚫", shrugging: "💔", kissing: "💋",
+          // bartending and drinking
+          hosting: "🤵", toasting: "🥂", drunk: "🥴",
+          dryCocktail: "🍸", fruityCocktail: "🍹", whiskey: "🥃", wine: "🍷", beer: "🍺",
+          // discussion topics
           animals: "🐻", nature: "🌲", travel: "🧳", food: "🍔",
         }[guy.task?.reason];
         const taskProgress = doingStationaryTask && (guy.task.ticksTaken / guy.task.ticksToWait);
