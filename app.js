@@ -1136,11 +1136,11 @@ function renderUI() {
 }
 
 function App(props) {
-  return [
+  return e("div", {className: "app-wrapper"},
     e(CharInspector, props),
     e(WorldEditor, props),
     e(RoomInspector, props),
-  ];
+  );
 }
 
 function CharInspector(props) {
@@ -1149,7 +1149,7 @@ function CharInspector(props) {
       const cleanAction = char.lastAction?.name.replace(`${char.name}:`, "").trim();
       return e("div", {
           className: `char-data${props.selectedChar === char.name ? " selected" : ""}`,
-          key: char.name,
+          key: char.id,
           onClick: () => {
             appState.selectedChar = char.name;
             renderUI();
@@ -1174,8 +1174,8 @@ function CharInspector(props) {
           },
         }, "×"),
         e("div", {className: "action-line"}, cleanAction),
-        e("ul", {className: "sways-list"}, char.lastAction?.sways.map(sway => {
-          return e("li", {},
+        e("ul", {className: "sways-list"}, char.lastAction?.sways.map((sway, idx) => {
+          return e("li", {key: idx},
             `${sway.type}: ${sway.name} (${sway.score || 0}, ${sway.rule.priority || "normal"})`
           );
         })),
@@ -1198,7 +1198,7 @@ function RoomInspector(props) {
       const roomKey = room.join(";");
       const roomData = props.roomData[roomKey] || {tags: ""};
       return e("div", {
-          className: "room-data",
+          className: "room-data", key: roomKey,
           style: {background: ROOM_COLORS[roomIdx % ROOM_COLORS.length]}
         },
         e("h3", {}, "Room " + roomIdx),
@@ -1335,9 +1335,9 @@ function WorldEditor(props) {
             pointAlong([x1,y1], [x2,y2], 0.5 + doorWidthAsProportionOfWallLength),
           ];
         }
-        return e("g", {className: "wall"},
+        return e("g", {className: "wall", key: wallKey},
           e("line", {
-            className: "wall", key: wallKey,
+            className: "wall",
             x1, y1, x2, y2, stroke: isHovered ? "red" : "black", strokeWidth: 2,
             onMouseEnter: ev => {
               appState.latestWall = wallKey;
@@ -1408,7 +1408,7 @@ function WorldEditor(props) {
           animals: "🐻", nature: "🌲", travel: "🧳", food: "🍔",
         }[guy.task?.reason];
         const taskProgress = doingStationaryTask && (guy.task.ticksTaken / guy.task.ticksToWait);
-        return e("g", {className: "guy-info"},
+        return e("g", {className: "guy-info", key: guy.id},
           fullPath.length > 0 && e("polyline", {
             className: "guy-path",
             points: fullPath.join(" "),
