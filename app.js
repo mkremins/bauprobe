@@ -202,7 +202,6 @@ function splitWall(wall, splitPoints) {
 
 function addWall(oldWalls, newWall) {
   const collisions = mapcat(oldWalls, oldWall => findCollisions(oldWall, newWall));
-  //console.log("COLLISIONS", collisions);
   if (collisions.length === 0) {
     // No collisions, push the new wall and call it a day!
     oldWalls.push(newWall);
@@ -233,7 +232,6 @@ function addWall(oldWalls, newWall) {
         // TODO somehow actually kill the subsumed old wall?
       }
     }
-    //console.log("SPLITS", newWallSplits, splitsPerOldWall);
     const newWallSections = splitWall(newWall, Array.from(newWallSplits));
     const updatedOldWalls = mapcat(oldWalls, oldWall => {
       const oldWallKey = JSON.stringify(oldWall);
@@ -320,7 +318,6 @@ function findRooms(walls) {
     // repeat this logic if any vertices aren't covered by the traversals
     // conducted here.
     const pointsNotSeenYet = allPointsEver.difference(allPointsSeen);
-    //console.log("UNSEEN POINTS", pointsNotSeenYet);
     const start = pointsNotSeenYet.values().next().value; // arbitrary unseen point
     allPointsSeen.add(start);
     const completeLoops = []; // all loops observed in this component
@@ -352,7 +349,6 @@ function findRooms(walls) {
         return activeBranches;
       });
     }
-    //console.log("LOOPS", completeLoops);
     loopsByComponent.push(completeLoops);
   }
   // consolidate: sort by length and exclude any loops
@@ -376,7 +372,6 @@ function findRooms(walls) {
       seenLoopSigs.push(sig);
       finalLoops.push(loop);
     }
-    //console.log("FINAL LOOPS", finalLoops);
     return finalLoops;
   });
   return allFinalLoops;
@@ -647,7 +642,6 @@ function takePraxishTurn(guy) {
     "dm.Char.InstructionType.Argument",
   ], {});
   for (const instruction of dmInstructions) {
-    console.log("Executing DM instruction :: ", instruction);
     const guy = appState.guys.find(guy => guy.name === instruction.Char);
     if (instruction.InstructionType === "planPath") {
       const roomName = instruction.Argument;
@@ -753,10 +747,6 @@ function planPath(initPos, targetPos) {
   const initRoomKey = initRoom.join(";");
   const targetRoom = appState.rooms.find(room => pointInsidePolygon(packedTargetPos, room));
   const targetRoomKey = targetRoom.join(";");
-  console.log(
-    "pathing from", packedInitPos, "in room", initRoomKey,
-    "to", packedTargetPos, "in room", targetRoomKey
-  );
   const pathingWithinRoom = initRoomKey === targetRoomKey;
   if (pathingWithinRoom) {
     if (!isObstructed([packedInitPos, packedTargetPos], appState.walls)) {
@@ -774,7 +764,6 @@ function planPath(initPos, targetPos) {
     return [...navmeshPath.map(unpackPoint), targetPos];
   }
   const roomsAndDoorsPath = bfs(appState.roomGraph, initRoomKey, targetRoomKey);
-  console.log("roomsAndDoorsPath", roomsAndDoorsPath);
   if (!roomsAndDoorsPath) {
     // no path from init room to target room :(
     return null;
@@ -837,12 +826,9 @@ function planPath(initPos, targetPos) {
       // it's a room! yield path along its navmesh
       // TODO or a straight-line shortcut if door->door path is unobstructed?
       const navmesh = appState.navmeshes[roomOrDoor];
-      console.log("navmesh", navmesh);
       const sourceDoor = roomsAndDoorsPath[idx - 1];
       const targetDoor = roomsAndDoorsPath[idx + 1];
-      console.log("doors", sourceDoor, targetDoor);
       const navmeshPath = bfs(navmesh, sourceDoor, targetDoor);
-      console.log("navmeshPath", navmeshPath);
       const finalNavmeshPath = navmeshPath || []; // fallback: straight line thru room
       // FIXME maybe use centroid or random navmesh point for fallback instead?
       return finalNavmeshPath.map(pointOrDoor => {
@@ -867,7 +853,6 @@ function planPath(initPos, targetPos) {
     }
   });
   const fullPath = [initPos, ...pathPrefix, ...innerPath, targetPos];
-  console.log("fullPath", fullPath);
   return fullPath;
 }
 
@@ -993,7 +978,6 @@ function tickSimulation() {
   for (const guy of appState.guys) {
     if (guy.task) {
       if (hasCompletedCurrentTask(guy)) {
-        //console.log("completed task!", guy);
         delete guy.task;
         // Praxish update: flag as no longer busy
         Praxish.performOutcome(appPraxishState, `delete char.${guy.name}.status`);
