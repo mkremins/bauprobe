@@ -1111,16 +1111,28 @@ function exportWorld() {
   downloadFile(filename, contents);
 }
 
-// upload a JSON file representing the world
+// given the `json` contents of a savefile, load it up
+function loadWorld(json) {
+  if (appState.mode === "sim") {
+    console.warn("Can't load savefile while simulating!");
+    return;
+  }
+  const saveState = JSON.parse(json);
+  appState = {...appState, ...rebuildWorld(saveState)};
+  if (saveState.guys?.length > 0) {
+    appState.guys = saveState.guys;
+  }
+  renderUI();
+}
+
+// prompt the user to upload a JSON savefile
 function importWorld() {
-  uploadFile(contents => {
-    const saveState = JSON.parse(contents);
-    appState = {...appState, ...rebuildWorld(saveState)};
-    if (saveState.guys?.length > 0) {
-      appState.guys = saveState.guys;
-    }
-    renderUI();
-  }, {fileType: "json"});
+  uploadFile(loadWorld, {fileType: "json"});
+}
+
+// load a prebaked JSON savefile for quick testing
+function loadTestWorld() {
+  fetch("houseparty.json").then(res => res.text()).then(loadWorld);
 }
 
 /// UI
