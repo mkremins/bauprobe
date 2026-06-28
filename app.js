@@ -63,6 +63,11 @@ function bfs(graph, init, target) {
   return null; // never found target
 }
 
+// Create a random ID with the given `prefix` if any.
+function makeID(prefix) {
+  return `${prefix || "id"}-${Math.random().toString(16).slice(2)}`;
+}
+
 /// Geometry
 
 function distance([x1, y1], [x2, y2]) {
@@ -912,7 +917,7 @@ function generateCharFace() {
 // Generate a whole random character.
 function generateChar() {
   return {
-    type: "guy", tags: "",
+    type: "char", id: makeID("char"), tags: "",
     name: generateCharName(), face: generateCharFace(),
   };
 }
@@ -1107,12 +1112,18 @@ function uploadFile(cb, opts) {
 function exportWorld() {
   const dateTimeString = (new Date()).toISOString().split(".")[0].replace("T", "_").replaceAll(":", "-");
   const filename = `bauprobe_${dateTimeString}.json`;
-  const saveState = clone(appState);
-  for (const key of Object.keys(saveState)) {
-    if (["walls","rooms","doors","roomData"].includes(key)) continue;
-    delete saveState[key];
+  const saveState = {
+    walls: appState.walls, rooms: appState.rooms,
+    doors: appState.doors, roomData: appState.roomData,
+    guys: [],
+  };
+  for (const guy of appState.guys) {
+    saveState.guys.push({
+      type: guy.type, id: guy.id,
+      name: guy.name, face: guy.face, tags: guy.tags,
+    });
   }
-  const contents = JSON.stringify(saveState);
+  const contents = JSON.stringify(saveState, null, 2);
   downloadFile(filename, contents);
 }
 
@@ -1121,6 +1132,9 @@ function importWorld() {
   uploadFile(contents => {
     const saveState = JSON.parse(contents);
     appState = {...appState, ...rebuildWorld(saveState)};
+    if (saveState.guys?.length > 0) {
+      appState.guys = saveState.guys;
+    }
     renderUI();
   }, {fileType: "json"});
 }
