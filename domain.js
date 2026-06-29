@@ -202,6 +202,43 @@ Domain.practices.push({
         score: 1,
       }],
     },
+    {
+      name: "[Actor]: Tell a story about [Topic]",
+      conditions: [
+        "char.Actor.at.Room",
+        "char.Other.at.Room",
+        "neq Actor Other",
+        // TODO need to check Other not busy?
+        "practice.yap.Room.lastTopic.Topic",
+      ],
+      outcomes: [
+        "insert practice.tellStory.Actor.Topic",
+        "insert dm.Actor.markBusy.100.telling",
+      ],
+      influences: [{
+        name: "We're already talking about [Topic]",
+        conditions: ["practice.yap.Room.lastTopic.Topic"],
+        score: 1,
+      },
+      {
+        name: "We've been talking about [Topic] for a while",
+        conditions: [
+          "practice.yap.Room.turnsOnTopic.Turns",
+          "gt Turns 3",
+          "calc Weight sub Turns 3"
+        ],
+        score: "Weight",
+      },
+      {
+        name: "[Teller] is already telling a story",
+        conditions: [
+          "practice.tellStory.Teller",
+          "char.Teller.at.Room",
+          "char.Actor.at.Room",
+        ],
+        priority: "forbidden",
+      }],
+    },
   ],
   volitions: [{
     name: "[Actor] is interested in [Topic]",
@@ -548,6 +585,198 @@ Domain.practices.push({
       influences: [{
         name: "Rowdy people like to chug their drinks",
         conditions: ["char.Actor.tag.rowdy"],
+        score: 1,
+      }],
+    },
+  ]
+});
+
+Domain.practices.push({
+  id: "tellStory",
+  name: "[Teller] is telling a story about [Topic]",
+  roles: ["Teller", "Topic"],
+  data: [
+    "storyPart.prebeginning!beginning",
+    "storyPart.beginning!middle",
+    "storyPart.middle!end"
+  ],
+  init: [
+    "insert practice.tellStory.Teller.Topic.stage!prebeginning",
+  ],
+  actions: [
+    {
+      name: "[Actor]: Tell [Part] of story",
+      conditions: [
+        "char.Actor.at.Room",
+        "eq Actor Teller",
+        "char.Listener.at.Room",
+        "neq Listener Teller",
+        "practice.tellStory.Teller.Topic.stage.OldPart",
+        "practiceData.tellStory.storyPart.OldPart.Part",
+      ],
+      outcomes: [
+        "insert practice.tellStory.Teller.Topic.stage!Part",
+        "insert dm.Actor.markBusy.100.telling",
+      ],
+      influences: [{
+        name: "[Teller] hasn't finished the story yet",
+        conditions: [],
+        priority: "required",
+      }],
+    },
+    {
+      name: "[Actor]: Wrap up the story",
+      conditions: [
+        "char.Actor.at.Room",
+        "eq Actor Teller",
+        "char.Listener.at.Room",
+        "neq Listener Teller",
+        "practice.tellStory.Teller.Topic.stage.end",
+      ],
+      outcomes: [
+        "delete practice.tellStory.Teller",
+        "insert dm.Actor.markBusy.100.sassy",
+      ],
+      influences: [{
+        name: "[Teller] hasn't finished the story yet",
+        conditions: [],
+        priority: "required",
+      }],
+    },
+    // reactions: interstitial
+    {
+      name: "[Actor]: React negatively to [Part] of [Teller]'s story",
+      conditions: [
+        "char.Actor.at.Room",
+        "char.Teller.at.Room",
+        "neq Actor Teller",
+        "practice.tellStory.Teller.Topic.stage.Part",
+      ],
+      outcomes: [
+        "insert dm.Actor.markBusy.100.unimpressed",
+        "insert practice.tellStory.Teller.Topic.reactions.Actor.Part.negative",
+      ],
+      influences: [{
+        name: "[Teller] has the floor",
+        conditions: [],
+        score: 5,
+      },
+      {
+        name: "[Actor] disliked the [OldPart] of [Teller]'s story",
+        conditions: ["practice.tellStory.Teller.Topic.reactions.Actor.OldPart.negative"],
+        score: 1,
+      }],
+    },
+    {
+      name: "[Actor]: React neutrally to [Part] of [Teller]'s story",
+      conditions: [
+        "char.Actor.at.Room",
+        "char.Teller.at.Room",
+        "neq Actor Teller",
+        "practice.tellStory.Teller.Topic.stage.Part",
+      ],
+      outcomes: [
+        "insert dm.Actor.markBusy.100.curious",
+        "insert practice.tellStory.Teller.Topic.reactions.Actor.Part.neutral",
+      ],
+      influences: [{
+        name: "[Teller] has the floor",
+        conditions: [],
+        score: 5,
+      },
+      {
+        name: "[Actor] didn't know what to think of the [OldPart] of [Teller]'s story",
+        conditions: ["practice.tellStory.Teller.Topic.reactions.Actor.OldPart.neutral"],
+        score: 1,
+      }],
+    },
+    {
+      name: "[Actor]: React positively to [Part] of [Teller]'s story",
+      conditions: [
+        "char.Actor.at.Room",
+        "char.Teller.at.Room",
+        "neq Actor Teller",
+        "practice.tellStory.Teller.Topic.stage.Part",
+        "practice.tellStory.Teller.Topic.reactions.Actor.Part.positive",
+      ],
+      outcomes: [
+        "insert dm.Actor.markBusy.100.laughing",
+      ],
+      influences: [{
+        name: "[Teller] has the floor",
+        conditions: [],
+        score: 5,
+      },
+      {
+        name: "[Actor] enjoyed the [OldPart] of [Teller]'s story",
+        conditions: ["practice.tellStory.Teller.Topic.reactions.Actor.OldPart.positive"],
+        score: 1,
+      }],
+    },
+    // reactions: conclusive
+    {
+      name: "[Actor]: React negatively to [Teller]'s story",
+      conditions: [
+        "char.Actor.at.Room",
+        "char.Teller.at.Room",
+        "neq Actor Teller",
+        "practice.tellStory.Teller.Topic.stage.end",
+      ],
+      outcomes: [
+        "insert dm.Actor.markBusy.100.rollingEyes",
+      ],
+      influences: [{
+        name: "[Teller] has the floor",
+        conditions: [],
+        score: 5,
+      },
+      {
+        name: "[Actor] disliked the [OldPart] of [Teller]'s story",
+        conditions: ["practice.tellStory.Teller.Topic.reactions.Actor.OldPart.negative"],
+        score: 1,
+      }],
+    },
+    {
+      name: "[Actor]: React neutrally to [Teller]'s story",
+      conditions: [
+        "char.Actor.at.Room",
+        "char.Teller.at.Room",
+        "neq Actor Teller",
+        "practice.tellStory.Teller.Topic.stage.end",
+      ],
+      outcomes: [
+        "insert dm.Actor.markBusy.100.clapping",
+      ],
+      influences: [{
+        name: "[Teller] has the floor",
+        conditions: [],
+        score: 5,
+      },
+      {
+        name: "[Actor] didn't know what to think of the [OldPart] of [Teller]'s story",
+        conditions: ["practice.tellStory.Teller.Topic.reactions.Actor.OldPart.neutral"],
+        score: 1,
+      }],
+    },
+    {
+      name: "[Actor]: React positively to [Teller]'s story",
+      conditions: [
+        "char.Actor.at.Room",
+        "char.Teller.at.Room",
+        "neq Actor Teller",
+        "practice.tellStory.Teller.Topic.stage.end",
+      ],
+      outcomes: [
+        "insert dm.Actor.markBusy.100.amazed",
+      ],
+      influences: [{
+        name: "[Teller] has the floor",
+        conditions: [],
+        score: 5,
+      },
+      {
+        name: "[Actor] enjoyed the [OldPart] of [Teller]'s story",
+        conditions: ["practice.tellStory.Teller.Topic.reactions.Actor.OldPart.positive"],
         score: 1,
       }],
     },

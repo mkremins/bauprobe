@@ -1410,9 +1410,14 @@ function WorldEditor(props) {
         const doingStationaryTask = taskType === "wait" || taskType === "busy";
         const taskIcon = {
           // basic activities
-          greeting: "👋", speaking: "💬", sighing: "😮‍💨", relaxing: "😌",
+          greeting: "👋", speaking: "💬", sighing: "😮‍💨",
+          relaxing: "😌", telling: "🗣️", sassy: "💁",
+          // reactions to "performances" by others
+          unimpressed: "😐", curious: "😮", laughing: "😆",
+          rollingEyes: "🙄", clapping: "👏", amazed: "🤩",
           // romance
-          flirting: "😘", looking: "👀", smirking: "😏", rejecting: "🚫", shrugging: "💔", kissing: "💋",
+          flirting: "😘", looking: "👀", smirking: "😏",
+          rejecting: "🚫", shrugging: "💔", kissing: "💋",
           // bartending and drinking
           hosting: "🤵", toasting: "🥂", drunk: "🥴",
           dryCocktail: "🍸", fruityCocktail: "🍹", whiskey: "🥃", wine: "🍷", beer: "🍺",
