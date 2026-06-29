@@ -588,6 +588,22 @@ Domain.practices.push({
         score: 1,
       }],
     },
+    {
+      name: "[Actor]: Go get another drink",
+      conditions: [
+        "eq Actor Drinker",
+        "not practice.drink.Actor.holdingDrink",
+        "practice.tendBar.BarRoom",
+      ],
+      outcomes: [
+        "insert dm.Actor.planPath.BarRoom",
+      ],
+      influences: [{
+        name: "People like drinking",
+        conditions: [],
+        score: 1,
+      }],
+    },
   ]
 });
 
