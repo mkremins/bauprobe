@@ -934,16 +934,18 @@ function hasCompletedCurrentTask(guy) {
   }
 }
 
-// Progress the current task of the given `guy` by one tick.
-function keepDoingCurrentTask(guy) {
+// Progress the current task of the given `guy` by the given `deltaTime`.
+function progressCurrentTask(guy, deltaTime) {
+  const SIM_SPEED = 60 / 1000;
+  const amount = deltaTime * SIM_SPEED;
   const task = guy.task;
   if (task.type === "move") {
     const oldPos = clone(guy.pos);
     guy.pos = pointAlong(task.from, task.to, task.amount);
-    task.amount += task.amountPerFrame;
+    task.amount += task.amountPerFrame * amount;
   }
   else if (task.type === "wait" || task.type === "busy") {
-    task.ticksTaken += 1;
+    task.ticksTaken += amount;
   }
   else {
     console.warn("invalid current task type", guy);
@@ -973,7 +975,13 @@ function startDoingNextTask(guy) {
   }
 }
 
-function tickSimulation() {
+function tickSimulation(currentTime) {
+  // timekeeping: determine deltaTime since last tick
+  if (!appState.prevTime) {
+    appState.prevTime = currentTime;
+  }
+  const deltaTime = currentTime - appState.prevTime;
+  appState.prevTime = currentTime;
   // for each guy, decide what they should be doing
   for (const guy of appState.guys) {
     if (guy.task) {
@@ -995,7 +1003,7 @@ function tickSimulation() {
         }
       }
       else {
-        keepDoingCurrentTask(guy);
+        progressCurrentTask(guy, deltaTime);
       }
     }
     else if (guy.taskQueue.length > 0) {
