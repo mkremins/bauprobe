@@ -17,12 +17,16 @@ Domain.practices.push({
     influences: [{
       name: "It's crowded in [OldRoom]",
       conditions: [
-        "char.Other1.at.OldRoom", "char.Other2.at.OldRoom", "char.Other3.at.OldRoom",
-        "neq Actor Other1", "neq Actor Other2", "neq Actor Other3",
-        "neq Other1 Other2", "neq Other1 Other3",
-        "neq Other2 Other3",
+        {
+          set: "Crowd",
+          find: ["Other"],
+          where: ["char.Other.at.OldRoom", "neq Actor Other"],
+        },
+        "calc CrowdSize count Crowd",
+        "gt CrowdSize 2",
+        "calc Weight sub CrowdSize 1",
       ],
-      score: 2,
+      score: "Weight",
     },
     {
       name: "[Actor] thinks [OldRoom] might be off limits",
