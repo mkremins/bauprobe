@@ -1175,7 +1175,16 @@ function CharInspector(props) {
             renderUI();
           },
         },
-        e("h3", {}, `${char.face} ${char.name}`),
+        e("h3", {},
+          e("span", {
+            className: "face",
+            onClick: () => {
+              appState.guys[charIdx].face = generateCharFace();
+              renderUI();
+            },
+          }, char.face),
+          " ", char.name
+        ),
         e("input", {
           type: "text",
           value: char.tags,
