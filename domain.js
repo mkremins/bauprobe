@@ -86,15 +86,14 @@ Domain.practices.push({
       name: "[Actor]: Strike up a conversation in [Room]",
       conditions: [
         "char.Actor.at.Room",
-        "char.Other.at.Room",
-        "neq Actor Other",
-        // TODO need to check Other not busy?
         "not practice.yap.Room",
+        {set: "Crowd", find: ["Char"], where: ["char.Char.at.Room"]},
+        "calc CrowdSize count Crowd",
+        "gt CrowdSize 1",
       ],
       outcomes: [
         "insert practice.yap.Room",
         "insert dm.Actor.markBusy.100.speaking",
-        "insert dm.Other.markBusy.100.speaking",
       ],
     },
     {
@@ -147,9 +146,9 @@ Domain.practices.push({
       name: "[Actor]: Keep talking about [Topic]",
       conditions: [
         "char.Actor.at.Room",
-        "char.Other.at.Room",
-        "neq Actor Other",
-        // TODO need to check Other not busy?
+        {set: "Crowd", find: ["Char"], where: ["char.Char.at.Room"]},
+        "calc CrowdSize count Crowd",
+        "gt CrowdSize 1",
         "practice.yap.Room.lastTopic.Topic",
         "neq Topic nothing",
         "practice.yap.Room.turnsOnTopic.Turns",
@@ -158,7 +157,6 @@ Domain.practices.push({
       outcomes: [
         "insert practice.yap.Room.turnsOnTopic!NextTurnCount",
         "insert dm.Actor.markBusy.100.Topic",
-        //"insert dm.Other.markBusy.100.Topic",
       ],
       influences: [{
         name: "We're already talking about [Topic]",
@@ -170,9 +168,9 @@ Domain.practices.push({
       name: "[Actor]: Start talking about [Topic]",
       conditions: [
         "char.Actor.at.Room",
-        "char.Other.at.Room",
-        "neq Actor Other",
-        // TODO need to check Other not busy?
+        {set: "Crowd", find: ["Char"], where: ["char.Char.at.Room"]},
+        "calc CrowdSize count Crowd",
+        "gt CrowdSize 1",
         "practice.yap.Room.lastTopic.OldTopic",
         "topic.Topic",
         "neq Topic OldTopic",
@@ -181,7 +179,6 @@ Domain.practices.push({
         "insert practice.yap.Room.lastTopic!Topic",
         "insert practice.yap.Room.turnsOnTopic!1",
         "insert dm.Actor.markBusy.100.Topic",
-        //"insert dm.Other.markBusy.100.Topic",
       ],
       influences: [{
         name: "[Topic] is related to [OldTopic]",
@@ -210,9 +207,9 @@ Domain.practices.push({
       name: "[Actor]: Tell a story about [Topic]",
       conditions: [
         "char.Actor.at.Room",
-        "char.Other.at.Room",
-        "neq Actor Other",
-        // TODO need to check Other not busy?
+        {set: "Crowd", find: ["Char"], where: ["char.Char.at.Room"]},
+        "calc CrowdSize count Crowd",
+        "gt CrowdSize 1",
         "practice.yap.Room.lastTopic.Topic",
       ],
       outcomes: [
@@ -629,8 +626,9 @@ Domain.practices.push({
       conditions: [
         "char.Actor.at.Room",
         "eq Actor Teller",
-        "char.Listener.at.Room",
-        "neq Listener Teller",
+        {set: "Crowd", find: ["Char"], where: ["char.Char.at.Room"]},
+        "calc CrowdSize count Crowd",
+        "gt CrowdSize 1",
         "practice.tellStory.Teller.Topic.stage.OldPart",
         "practiceData.tellStory.storyPart.OldPart.Part",
       ],
@@ -649,8 +647,9 @@ Domain.practices.push({
       conditions: [
         "char.Actor.at.Room",
         "eq Actor Teller",
-        "char.Listener.at.Room",
-        "neq Listener Teller",
+        {set: "Crowd", find: ["Char"], where: ["char.Char.at.Room"]},
+        "calc CrowdSize count Crowd",
+        "gt CrowdSize 1",
         "practice.tellStory.Teller.Topic.stage.end",
       ],
       outcomes: [
