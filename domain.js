@@ -717,7 +717,6 @@ Domain.practices.push({
         "char.Teller.at.Room",
         "neq Actor Teller",
         "practice.tellStory.Teller.Topic.stage.Part",
-        "practice.tellStory.Teller.Topic.reactions.Actor.Part.positive",
       ],
       outcomes: [
         "insert dm.Actor.markBusy.100.laughing",
