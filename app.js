@@ -624,16 +624,10 @@ function selectNPCAction(actions) {
   }
 }
 
-function takePraxishTurn(guy) {
-  // i guess we're assuming the guy is untasked at this point?
-  const possibleActions = Swaygent.scoreActions(appPraxishState, guy) || [];
-  if (possibleActions.length === 0) {
-    console.warn("No actions to perform!", guy);
-    return false;
-  }
-  const impossibleActions = possibleActions.impossibleActions;
-  console.log("Considering actions", {guy, possibleActions, impossibleActions});
-  const action = selectNPCAction(possibleActions);
+// Given a `guy` and a valid Praxish `action` for them to perform,
+// actually perform the action and process any inserted DM instructions.
+// Return a falsy value if the action somehow can't be fully performed.
+function performAction(guy, action) {
   console.log("Performing action :: ", action);
   Praxish.performAction(appPraxishState, action);
   guy.lastAction = action;
@@ -719,6 +713,19 @@ function takePraxishTurn(guy) {
   // clear DM instructions
   Praxish.performOutcome(appPraxishState, "delete dm");
   return true;
+}
+
+function takePraxishTurn(guy) {
+  // i guess we're assuming the guy is untasked at this point?
+  const possibleActions = Swaygent.scoreActions(appPraxishState, guy) || [];
+  if (possibleActions.length === 0) {
+    console.warn("No actions to perform!", guy);
+    return false;
+  }
+  const impossibleActions = possibleActions.impossibleActions;
+  console.log("Considering actions", {guy, possibleActions, impossibleActions});
+  const action = selectNPCAction(possibleActions);
+  return performAction(guy, action);
 }
 
 /// Simulation
@@ -1010,11 +1017,15 @@ function tickSimulation(currentTime) {
       startDoingNextTask(guy);
     }
     else {
-      // find a new action to perform
-      const tookPraxishTurn = takePraxishTurn(guy);
-      if (!tookPraxishTurn) {
-        // if it failed, find something else to do
-        guy.taskQueue = assignRandomGoal(guy);
+      const isPlayer = guy.tags?.split(/\s+/).includes("player");
+      const isSelected = guy.name === appState.selectedChar;
+      if (!isPlayer || !isSelected) {
+        // find a new action to perform
+        const tookPraxishTurn = takePraxishTurn(guy);
+        if (!tookPraxishTurn) {
+          // if it failed, find something else to do
+          guy.taskQueue = assignRandomGoal(guy);
+        }
       }
     }
   }
@@ -1160,6 +1171,33 @@ function App(props) {
     e(CharInspector, props),
     e(WorldEditor, props),
     e(RoomInspector, props),
+    e(PlayerControls, props),
+  );
+}
+
+function PlayerControls(props) {
+  if (appState.mode !== "sim") return null;
+  const selectedChar = props.guys.find(guy => guy.name === props.selectedChar);
+  if (!selectedChar?.tags?.split(/\s+/).includes("player")) return null;
+  const isTasked = !!selectedChar.task || selectedChar.taskQueue.length > 0;
+  const possibleActions = Swaygent.scoreActions(appPraxishState, selectedChar) || [];
+  return e("div", {className: "player-controls"},
+    e("h3", {}, `${selectedChar.face} ${selectedChar.name}`),
+    e("div", {className: "action-buttons"},
+      possibleActions.map((action, actionIdx) => {
+        const cleanName = action.name.replace(`${selectedChar.name}: `, "");
+        return e("button", {
+            className: "action-button", key: actionIdx,
+            disabled: isTasked,
+            onClick: () => {
+              performAction(selectedChar, action);
+              renderUI();
+            },
+          },
+          cleanName
+        );
+      }),
+    ),
   );
 }
 
